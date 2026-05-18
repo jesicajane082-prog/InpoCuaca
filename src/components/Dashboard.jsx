@@ -1178,9 +1178,9 @@ INSTRUKSI PENTING:
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0, opacity: 0 }}
                 onClick={() => setIsChatOpen(true)}
-                className="w-14 h-14 bg-slate-900 text-white rounded-full flex items-center justify-center shadow-lg hover:shadow-xl active:scale-95 transition-all hover:bg-slate-800 relative group"
+                className="w-14 h-14 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 rounded-full flex items-center justify-center shadow-md hover:shadow-lg active:scale-95 transition-all border border-slate-200 relative group"
               >
-                <MessageSquare className="w-6 h-6 text-white" />
+                <MessageSquare className="w-6 h-6 text-slate-600" />
                 <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white animate-ping" />
                 <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white" />
                 
@@ -1203,8 +1203,8 @@ INSTRUKSI PENTING:
                 {/* Header */}
                 <div className="bg-slate-50 border-b border-slate-100 px-6 py-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-slate-900 text-white rounded-xl flex items-center justify-center">
-                      <Sparkles className="w-4 h-4 text-white" />
+                    <div className="w-8 h-8 bg-slate-100 text-slate-600 border border-slate-200/50 rounded-xl flex items-center justify-center">
+                      <Sparkles className="w-4 h-4 text-slate-500" />
                     </div>
                     <div>
                       <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5 text-left">
@@ -1239,7 +1239,7 @@ INSTRUKSI PENTING:
                       <div
                         className={`px-4 py-3 rounded-2xl text-xs sm:text-sm font-medium leading-relaxed text-left whitespace-pre-wrap ${
                           msg.role === 'user'
-                            ? 'bg-slate-950 text-white rounded-tr-none'
+                            ? 'bg-slate-600 text-white rounded-tr-none'
                             : 'bg-slate-100 text-slate-800 rounded-tl-none border border-slate-200/40'
                         }`}
                       >
@@ -1308,9 +1308,9 @@ INSTRUKSI PENTING:
                   <button
                     onClick={() => handleSendMessage()}
                     disabled={chatLoading || !chatInput.trim()}
-                    className="p-2.5 bg-slate-950 hover:bg-slate-850 text-white rounded-xl active:scale-95 transition-all flex items-center justify-center disabled:opacity-30 disabled:scale-100"
+                    className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200/60 rounded-xl active:scale-95 transition-all flex items-center justify-center disabled:opacity-30 disabled:scale-100"
                   >
-                    <Send className="w-4 h-4" />
+                    <Send className="w-4 h-4 text-slate-500" />
                   </button>
                 </div>
               </motion.div>
