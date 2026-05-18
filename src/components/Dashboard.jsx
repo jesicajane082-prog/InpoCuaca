@@ -893,14 +893,14 @@ INSTRUKSI PENTING:
 
   const [performanceData, setPerformanceData] = useState({
     'EURUSD': {
-      strategyName: 'Smart Money Concepts (SMC) & Liquidity Sweeps',
+      strategyName: 'SMC x Supply & Demand (S&D) + Support Resistance',
       winRate: '68.2%',
       avgRrr: '1:2.3',
       profit1D: '+0.00%',
       profit1W: '+0.00%',
       profit1M: '+0.00%',
       totalTrades: '0 Trades',
-      analysisExplain: 'Menggunakan pemetaan struktur pasar CHoCH (Change of Character) di timeframe M15. Bot mengeksekusi SELL di 1.08450 setelah mendeteksi Liquidity Sweep di atas harga tertinggi sesi London (London High) dengan probabilitas keberhasilan teknik mencapai 68.2% didukung RSI Divergence.'
+      analysisExplain: 'Analisis M15 (Intraday) difokuskan pada presisi momentum. Algoritma menggabungkan SMC (Smart Money Concepts) untuk melacak pergerakan likuiditas institusi (Liquidity Sweep & CHoCH), yang kemudian divivalidasi ulang secara ganda menggunakan area Supply & Demand kuat serta pantulan klasik dari Support/Resistance historis.'
     },
     'GBPUSD': {
       strategyName: 'Order Block & Fair Value Gap (FVG) Refinement',
