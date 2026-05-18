@@ -1048,15 +1048,44 @@ export default function Dashboard() {
           )}
         </AnimatePresence>
 
-        {/* Minimalist Footer */}
-        <footer className="mt-24 pt-8 border-t border-slate-50 text-center">
-          <p className="text-slate-300 text-[10px] font-bold mb-4 tracking-widest">
-            Portal Informasi Publik — Ikko
-          </p>
-          <div className="flex items-center justify-center gap-6">
-            <span className="w-1 h-1 bg-slate-200 rounded-full" />
-            <span className="text-[9px] font-medium text-slate-400">Data sinkronisasi otomatis dari sumber terpercaya</span>
-            <span className="w-1 h-1 bg-slate-200 rounded-full" />
+        {/* Modern Rich Footer */}
+        <footer className="mt-16 md:mt-24 pt-10 pb-6 border-t border-slate-100 bg-slate-50/30 rounded-3xl px-6 md:px-10 text-slate-500">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10 text-left">
+            {/* Left brand block */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 bg-slate-800 text-white rounded-lg flex items-center justify-center font-bold text-xs shadow-sm">
+                  I
+                </div>
+                <h3 className="text-sm font-bold text-slate-800 tracking-wide uppercase">
+                  Portal Informasi Publik
+                </h3>
+              </div>
+              <p className="text-xs text-slate-400 leading-relaxed max-w-sm">
+                Platform modern terintegrasi untuk memantau cuaca lokal, jadwal sholat harian, info gempa terkini BMKG, serta statistik real-time Liga 1 Indonesia.
+              </p>
+            </div>
+
+            {/* Right sources / info block */}
+            <div className="flex flex-col md:items-end justify-between gap-4">
+              <div className="flex flex-wrap gap-2 md:justify-end">
+                <span className="px-2.5 py-1 bg-slate-100 text-slate-600 rounded-md text-[10px] font-semibold border border-slate-200/40">BMKG API</span>
+                <span className="px-2.5 py-1 bg-slate-100 text-slate-600 rounded-md text-[10px] font-semibold border border-slate-200/40">Open-Meteo</span>
+                <span className="px-2.5 py-1 bg-slate-100 text-slate-600 rounded-md text-[10px] font-semibold border border-slate-200/40">TheSportsDB</span>
+              </div>
+              <p className="text-[10px] text-slate-400 md:text-right">
+                Data diperbarui secara otomatis setiap beberapa menit dari API terpercaya.
+              </p>
+            </div>
+          </div>
+
+          <div className="pt-6 border-t border-slate-100/80 flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left">
+            <p className="text-[11px] font-medium text-slate-400">
+              &copy; {new Date().getFullYear()} Ikko. Hak Cipta Dilindungi.
+            </p>
+            <p className="text-[11px] font-semibold text-slate-500 flex items-center gap-1 group justify-center sm:justify-end">
+              Dibuat dengan <span className="text-rose-500 animate-pulse">❤️</span> oleh <span className="text-slate-800 underline underline-offset-4 decoration-slate-200 group-hover:decoration-slate-400 transition-colors">Ikko</span>
+            </p>
           </div>
         </footer>
 
