@@ -631,7 +631,9 @@ export default function Dashboard() {
                 </div>
                 <div>
                   <p className="text-xs font-medium text-slate-400 mb-1 tracking-wide">Jangan lupa waktu solatnya ya</p>
-                  <h2 className="text-lg md:text-2xl font-semibold tracking-tight text-slate-800">Sholat {nextPrayer.name} <span className="text-slate-500 ml-2 font-light">({nextPrayer.time})</span></h2>
+                  <h2 className="text-base sm:text-xl md:text-2xl font-semibold tracking-tight text-slate-800">
+                    Sholat {nextPrayer.name} <span className="text-slate-400 ml-1.5 font-normal text-xs sm:text-sm md:text-base">({nextPrayer.time})</span>
+                  </h2>
                 </div>
               </div>
               <div className="bg-white text-slate-900 px-4 md:px-6 py-3 md:py-4 rounded-xl text-center min-w-[100px] md:min-w-[140px] z-10 shadow-sm border border-slate-200">
