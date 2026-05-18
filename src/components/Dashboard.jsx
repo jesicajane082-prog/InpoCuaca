@@ -240,7 +240,7 @@ export default function Dashboard() {
   ]);
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
-  const [hfToken, setHfToken] = useState(() => localStorage.getItem('hf_token') || '');
+  const hfToken = import.meta.env.VITE_HF_TOKEN || '';
   const [selectedModel, setSelectedModel] = useState('Qwen/Qwen2.5-72B-Instruct');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
@@ -261,7 +261,7 @@ export default function Dashboard() {
       setTimeout(() => {
         setChatMessages(prev => [
           ...prev,
-          { role: 'assistant', content: 'Maaf, untuk mengaktifkan obrolan AI, silakan klik tombol roda gigi ⚙️ di kanan atas jendela chat ini dan masukkan Token Hugging Face Anda (gratis dibuat di huggingface.co).' }
+          { role: 'assistant', content: 'Maaf, Asisten AI saat ini tidak aktif karena Token Hugging Face belum dikonfigurasi di file .env server.' }
         ]);
         setChatLoading(false);
       }, 800);
@@ -1243,26 +1243,7 @@ INSTRUKSI PENTING:
                       className="border-b border-slate-100 bg-slate-50/50 overflow-hidden"
                     >
                       <div className="p-5 space-y-4 text-left">
-                        <div className="space-y-1.5">
-                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide flex items-center gap-1.5">
-                            <Key className="w-3 h-3 text-slate-400" />
-                            Hugging Face Token
-                          </label>
-                          <input
-                            type="password"
-                            placeholder="hf_..."
-                            value={hfToken}
-                            onChange={(e) => {
-                              const t = e.target.value;
-                              setHfToken(t);
-                              localStorage.setItem('hf_token', t);
-                            }}
-                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs outline-none hover:border-slate-300 focus:ring-2 focus:ring-slate-100 font-medium"
-                          />
-                          <p className="text-[9px] text-slate-400">
-                            Masukkan token gratis Anda. Dapatkan di <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener noreferrer" className="text-slate-900 underline font-semibold">Hugging Face Settings</a>.
-                          </p>
-                        </div>
+                        
 
                         <div className="space-y-1.5">
                           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide flex items-center gap-1.5">
@@ -1335,7 +1316,7 @@ INSTRUKSI PENTING:
                 <div className="border-t border-slate-100 p-4 bg-white flex items-center gap-2">
                   <input
                     type="text"
-                    placeholder={hfToken ? "Tanya asisten AI..." : "Masukkan token Hugging Face di Pengaturan..."}
+                    placeholder={hfToken ? "Tanya asisten AI..." : "Asisten AI tidak aktif (Token kosong)..."}
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
