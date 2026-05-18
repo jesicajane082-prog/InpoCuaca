@@ -896,32 +896,14 @@ INSTRUKSI PENTING:
   }, []);
 
   const [botLogs, setBotLogs] = useState({
-    'EURUSD': [
-      { id: 1, type: 'SELL', entry: '1.08450', rrr: '1:2.3', sl: '1.08600', tp: '1.08105', timeframe: 'M15', probability: '68.2%', pnl: 'PROFIT (+0.56%)', status: 'closed', time: '10 menit yang lalu' },
-      { id: 2, type: 'BUY', entry: '1.08210', rrr: '1:2.0', sl: '1.08060', tp: '1.08510', timeframe: 'M15', probability: '67.5%', pnl: 'LOSS (-0.31%)', status: 'closed', time: '2 jam yang lalu' }
-    ],
-    'GBPUSD': [
-      { id: 1, type: 'BUY', entry: '1.25410', rrr: '1:2.5', sl: '1.25210', tp: '1.25910', timeframe: 'M30', probability: '65.5%', pnl: 'PROFIT (+0.82%)', status: 'closed', time: '45 menit yang lalu' }
-    ],
-    'USDJPY': [
-      { id: 1, type: 'BUY', entry: '155.60', rrr: '1:2.1', sl: '155.35', tp: '156.12', timeframe: 'H1', probability: '71.0%', pnl: 'RUNNING (+0.44%)', status: 'active', time: 'Aktif' }
-    ],
-    'XAUUSD': [
-      { id: 1, type: 'BUY', entry: '2412.50', rrr: '1:2.7', sl: '2404.50', tp: '2434.10', timeframe: 'H4', probability: '72.5%', pnl: 'PROFIT (+1.24%)', status: 'closed', time: '5 menit yang lalu' },
-      { id: 2, type: 'SELL', entry: '2430.10', rrr: '1:2.4', sl: '2438.10', tp: '2418.66', timeframe: 'H4', probability: '71.8%', pnl: 'RUNNING (+0.18%)', status: 'active', time: 'Aktif' }
-    ],
-    'AAPL': [
-      { id: 1, type: 'BUY', entry: '182.30', rrr: '1:2.2', sl: '180.30', tp: '186.70', timeframe: 'D1', probability: '66.8%', pnl: 'PROFIT (+1.95%)', status: 'closed', time: '1 hari yang lalu' }
-    ],
-    'TSLA': [
-      { id: 1, type: 'BUY', entry: '174.60', rrr: '1:2.6', sl: '171.10', tp: '183.70', timeframe: 'H1', probability: '60.4%', pnl: 'LOSS (-0.85%)', status: 'closed', time: '5 jam yang lalu' }
-    ],
-    'BBRI': [
-      { id: 1, type: 'BUY', entry: '4680', rrr: '1:2.5', sl: '4630', tp: '4755', timeframe: 'D1', probability: '70.2%', pnl: 'PROFIT (+3.20%)', status: 'closed', time: '3 jam yang lalu' }
-    ],
-    'TLKM': [
-      { id: 1, type: 'BUY', entry: '3200', rrr: '1:2.1', sl: '3170', tp: '3263', timeframe: 'D1', probability: '69.0%', pnl: 'RUNNING (+0.75%)', status: 'active', time: 'Aktif' }
-    ]
+    'EURUSD': [],
+    'GBPUSD': [],
+    'USDJPY': [],
+    'XAUUSD': [],
+    'AAPL': [],
+    'TSLA': [],
+    'BBRI': [],
+    'TLKM': []
   });
 
   const [performanceData, setPerformanceData] = useState({
@@ -929,200 +911,308 @@ INSTRUKSI PENTING:
       strategyName: 'Smart Money Concepts (SMC) & Liquidity Sweeps',
       winRate: '68.2%',
       avgRrr: '1:2.3',
-      profit1D: '+1.24%',
-      profit1W: '+5.82%',
-      profit1M: '+22.40%',
-      totalTrades: '34 Trades',
+      profit1D: '+0.00%',
+      profit1W: '+0.00%',
+      profit1M: '+0.00%',
+      totalTrades: '0 Trades',
       analysisExplain: 'Menggunakan pemetaan struktur pasar CHoCH (Change of Character) di timeframe M15. Bot mengeksekusi SELL di 1.08450 setelah mendeteksi Liquidity Sweep di atas harga tertinggi sesi London (London High) dengan probabilitas keberhasilan teknik mencapai 68.2% didukung RSI Divergence.'
     },
     'GBPUSD': {
       strategyName: 'Order Block & Fair Value Gap (FVG) Refinement',
       winRate: '65.5%',
       avgRrr: '1:2.5',
-      profit1D: '+0.82%',
-      profit1W: '+4.90%',
-      profit1M: '+18.15%',
-      totalTrades: '28 Trades',
+      profit1D: '+0.00%',
+      profit1W: '+0.00%',
+      profit1M: '+0.00%',
+      totalTrades: '0 Trades',
       analysisExplain: 'Strategi difokuskan pada entry di area FVG H1 pasca-rilis kalender ekonomi AS. Probabilitas keberhasilan teknik mencapai 65.5% dengan perlindungan Stop Loss ketat di bawah batas kritis Support H1.'
     },
     'USDJPY': {
       strategyName: 'Mean Reversion & Bollinger Band Extremes',
       winRate: '71.0%',
       avgRrr: '1:2.1',
-      profit1D: '+0.44%',
-      profit1W: '+3.75%',
-      profit1M: '+15.80%',
-      totalTrades: '42 Trades',
+      profit1D: '+0.00%',
+      profit1W: '+0.00%',
+      profit1M: '+0.00%',
+      totalTrades: '0 Trades',
       analysisExplain: 'Strategi pembalikan arah (Mean Reversion) memanfaatkan deviasi ekstrim 2.5 standard deviation pada Bollinger Bands H1. Memanfaatkan pelemahan momentum pembeli Yen Jepang.'
     },
     'XAUUSD': {
       strategyName: 'Volume Profile & H4 Breakout Confirmation',
       winRate: '72.5%',
       avgRrr: '1:2.7',
-      profit1D: '+2.15%',
-      profit1W: '+9.40%',
-      profit1M: '+31.60%',
-      totalTrades: '38 Trades',
+      profit1D: '+0.00%',
+      profit1W: '+0.00%',
+      profit1M: '+0.00%',
+      totalTrades: '0 Trades',
       analysisExplain: 'Analisis berbasis Volume Profile pada area High Volume Node (HVN) emas. Posisi BUY di 2412.50 diambil setelah terjadi breakout dikonfirmasi volume transaksi institusional yang masif.'
     },
     'AAPL': {
       strategyName: 'Gap Fill & Trend Following (EMA 20/50)',
       winRate: '66.8%',
       avgRrr: '1:2.2',
-      profit1D: '+1.95%',
-      profit1W: '+5.10%',
-      profit1M: '+12.40%',
-      totalTrades: '16 Trades',
+      profit1D: '+0.00%',
+      profit1W: '+0.00%',
+      profit1M: '+0.00%',
+      totalTrades: '0 Trades',
       analysisExplain: 'Strategi mengikuti tren utama menggunakan persilangan EMA 20 dan 50 pada chart harian. Mengambil momentum rilis produk baru Apple dengan stop loss di bawah swing low kemarin.'
     },
     'TSLA': {
       strategyName: 'Volatility Breakout & ADX Momentum',
       winRate: '60.4%',
       avgRrr: '1:2.6',
-      profit1D: '-0.85%',
-      profit1W: '+2.90%',
-      profit1M: '+14.20%',
-      totalTrades: '22 Trades',
+      profit1D: '+0.00%',
+      profit1W: '+0.00%',
+      profit1M: '+0.00%',
+      totalTrades: '0 Trades',
       analysisExplain: 'Strategi breakout volatilitas tinggi dengan filter momentum indikator ADX > 25. Karena sifat saham Tesla yang sangat volatil, stop loss ditempatkan 1.5 ATR (Average True Range) dari entry.'
     },
     'BBRI': {
       strategyName: 'Foreign Flow Accumulation & Fibonacci Retracement',
       winRate: '70.2%',
       avgRrr: '1:2.5',
-      profit1D: '+3.20%',
-      profit1W: '+7.80%',
-      profit1M: '+19.60%',
-      totalTrades: '14 Trades',
+      profit1D: '+0.00%',
+      profit1W: '+0.00%',
+      profit1M: '+0.00%',
+      totalTrades: '0 Trades',
       analysisExplain: 'Analisis berbasis data akumulasi aliran modal asing (Foreign Flow) dikombinasikan dengan level Fibonacci Retracement 61.8%. Bot masuk posisi BUY setelah harga memantul di area support Rp4.650.'
     },
     'TLKM': {
       strategyName: 'Dividend Yield Accumulation & Support Bounce',
       winRate: '69.0%',
       avgRrr: '1:2.1',
-      profit1D: '+0.75%',
-      profit1W: '+3.40%',
-      profit1M: '+10.80%',
-      totalTrades: '12 Trades',
+      profit1D: '+0.00%',
+      profit1W: '+0.00%',
+      profit1M: '+0.00%',
+      totalTrades: '0 Trades',
       analysisExplain: 'Bot memanfaatkan area jenuh jual (Oversold) pada RSI harian di dekat area Support psikologis kuat Rp3.200, mengantisipasi pemantulan teknikal jangka menengah.'
     }
   });
 
-  // Live Trading Simulation Engine Loop (Runs every 15s)
+  // Live Trading Simulation Engine Loop (Runs every 3 seconds)
   useEffect(() => {
     const interval = setInterval(() => {
       const symbols = ['EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD', 'AAPL', 'TSLA', 'BBRI', 'TLKM'];
-      const randomSymbol = symbols[Math.floor(Math.random() * symbols.length)];
       
-      setBotLogs(prevLogs => {
-        const symbolLogs = [...(prevLogs[randomSymbol] || [])];
+      // 1. Tick micro-fluctuations for all live prices to make the market tick live in real-time!
+      setLivePrices(prev => {
+        const nextPrices = { ...prev };
         
-        // 1. If active trade exists, resolve it!
-        const activeTradeIdx = symbolLogs.findIndex(log => log.status === 'active');
-        if (activeTradeIdx !== -1 && Math.random() > 0.4) {
-          const activeTrade = { ...symbolLogs[activeTradeIdx] };
-          const winRateVal = parseFloat(performanceData[randomSymbol]?.winRate || '68%') / 100;
-          const isWin = Math.random() < winRateVal;
+        symbols.forEach(sym => {
+          const basePrice = prev[sym] || (sym === 'EURUSD' ? 1.16 : sym === 'USDJPY' ? 158.0 : 3200);
+          const isFX = sym === 'EURUSD' || sym === 'GBPUSD';
+          const isIndo = sym === 'BBRI' || sym === 'TLKM';
+          const isGold = sym === 'XAUUSD';
           
-          const rrrParts = activeTrade.rrr.split(':').map(Number);
-          const riskMultiplier = rrrParts[1] || 2.0;
-          const pnlVal = isWin 
-            ? `PROFIT (+${(0.20 * riskMultiplier).toFixed(2)}%)` 
-            : `LOSS (-${(0.20).toFixed(2)}%)`;
+          let fluctuation = 0;
+          if (isFX) {
+            fluctuation = basePrice * (Math.random() - 0.5) * 0.00010; // tiny FX ticks
+          } else if (isGold) {
+            fluctuation = (Math.random() - 0.5) * 0.25; // Gold ticks
+          } else if (isIndo) {
+            fluctuation = Math.round((Math.random() - 0.5) * 10);
+          } else {
+            fluctuation = (Math.random() - 0.5) * 0.12; // Stock ticks
+          }
           
-          activeTrade.pnl = pnlVal;
-          activeTrade.status = 'closed';
-          activeTrade.time = 'Baru saja selesai';
-          
-          symbolLogs[activeTradeIdx] = activeTrade;
-          
-          // Update portfolio returns
-          setPerformanceData(prevPerf => {
-            const currentSymbolPerf = { ...prevPerf[randomSymbol] };
-            const changePct = isWin ? (0.20 * riskMultiplier) : -0.20;
-            
-            const parsePct = (val) => parseFloat(val.replace(/[+%]/g, '')) || 0;
-            const new1D = parsePct(currentSymbolPerf.profit1D) + changePct;
-            const new1W = parsePct(currentSymbolPerf.profit1W) + changePct;
-            const new1M = parsePct(currentSymbolPerf.profit1M) + changePct;
-            
-            currentSymbolPerf.profit1D = `${new1D >= 0 ? '+' : ''}${new1D.toFixed(2)}%`;
-            currentSymbolPerf.profit1W = `${new1W >= 0 ? '+' : ''}${new1W.toFixed(2)}%`;
-            currentSymbolPerf.profit1M = `${new1M >= 0 ? '+' : ''}${new1M.toFixed(2)}%`;
-            
-            const totalTr = parseInt(currentSymbolPerf.totalTrades) || 0;
-            currentSymbolPerf.totalTrades = `${totalTr + 1} Trades`;
-            
-            return {
-              ...prevPerf,
-              [randomSymbol]: currentSymbolPerf
-            };
-          });
-        } 
-        // 2. Spawn new running trade
-        else if (symbolLogs.filter(log => log.status === 'active').length === 0) {
-          const basePrice = livePrices[randomSymbol] || 1.08;
-          const delta = basePrice * (Math.random() - 0.5) * 0.0003;
-          const newEntryNum = basePrice + delta;
-          
-          const tfMap = {
-            'EURUSD': 'M15', 'GBPUSD': 'M30', 'USDJPY': 'H1', 'XAUUSD': 'H4',
-            'AAPL': 'D1', 'TSLA': 'H1', 'BBRI': 'D1', 'TLKM': 'D1'
-          };
-          const tf = tfMap[randomSymbol] || 'H1';
-          
-          const distMap = {
-            'EURUSD': 0.00150, 'GBPUSD': 0.00200, 'USDJPY': 0.25, 'XAUUSD': 8.00,
-            'AAPL': 2.00, 'TSLA': 3.50, 'BBRI': 50, 'TLKM': 30
-          };
-          const slDist = distMap[randomSymbol] || 0.01;
-          
-          const isBuy = Math.random() > 0.5;
-          const typeStr = isBuy ? 'BUY' : 'SELL';
-          
-          const rrrValStr = performanceData[randomSymbol]?.avgRrr || '1:2.0';
-          const rrrParts = rrrValStr.split(':').map(Number);
-          const riskMultiplier = rrrParts[1] || 2.0;
-          
-          const slNum = isBuy ? (newEntryNum - slDist) : (newEntryNum + slDist);
-          const tpNum = isBuy ? (newEntryNum + slDist * riskMultiplier) : (newEntryNum - slDist * riskMultiplier);
-          
-          const decs = randomSymbol.includes('JPY') ? 2 : randomSymbol.includes('BBRI') || randomSymbol.includes('TLKM') ? 0 : 5;
-          const newEntry = newEntryNum.toFixed(decs);
-          const slPrice = slNum.toFixed(decs);
-          const tpPrice = tpNum.toFixed(decs);
-          
-          const baseWinRate = parseFloat(performanceData[randomSymbol]?.winRate || '68%');
-          const tradeProb = (baseWinRate + (Math.random() - 0.5) * 4).toFixed(1) + '%';
-          
-          const newTrade = {
-            id: Date.now(),
-            type: typeStr,
-            entry: newEntry,
-            sl: slPrice,
-            tp: tpPrice,
-            timeframe: tf,
-            rrr: rrrValStr,
-            probability: tradeProb,
-            pnl: 'RUNNING (+0.00%)',
-            status: 'active',
-            time: 'Aktif'
-          };
-          
-          symbolLogs.unshift(newTrade);
-          if (symbolLogs.length > 5) symbolLogs.pop();
-        }
+          const nextVal = basePrice + fluctuation;
+          nextPrices[sym] = isIndo ? Math.round(nextVal) : parseFloat(nextVal.toFixed(sym.includes('JPY') ? 2 : isGold ? 2 : isFX ? 5 : 2));
+        });
         
-        return {
-          ...prevLogs,
-          [randomSymbol]: symbolLogs
-        };
+        return nextPrices;
       });
-    }, 15000);
+
+      // 2. Evaluate active trades and boundary crossings for all symbols
+      setBotLogs(prevLogs => {
+        const nextLogs = { ...prevLogs };
+        
+        symbols.forEach(sym => {
+          const symbolLogs = [...(prevLogs[sym] || [])];
+          const activeTradeIdx = symbolLogs.findIndex(log => log.status === 'active');
+          const currentLive = livePrices[sym];
+          
+          if (!currentLive) return; // Wait for rates to load
+          
+          if (activeTradeIdx !== -1) {
+            // Evaluasi active trade
+            const activeTrade = { ...symbolLogs[activeTradeIdx] };
+            const entryNum = parseFloat(activeTrade.entry);
+            const slNum = parseFloat(activeTrade.sl);
+            const tpNum = parseFloat(activeTrade.tp);
+            
+            let triggerClose = false;
+            let isWin = false;
+            let closeReason = 'Target Hit';
+            
+            // A. Boundary Crossover (SL/TP)
+            if (activeTrade.type === 'BUY') {
+              if (currentLive >= tpNum) {
+                triggerClose = true;
+                isWin = true;
+              } else if (currentLive <= slNum) {
+                triggerClose = true;
+                isWin = false;
+              }
+            } else { // SELL
+              if (currentLive <= tpNum) {
+                triggerClose = true;
+                isWin = true;
+              } else if (currentLive >= slNum) {
+                triggerClose = true;
+                isWin = false;
+              }
+            }
+            
+            // B. AI Trailing Stop Risk Management Decision (3% chance per tick to close trade early)
+            if (!triggerClose && Math.random() < 0.03) {
+              triggerClose = true;
+              const runningProfit = activeTrade.type === 'BUY'
+                ? ((currentLive - entryNum) / entryNum) * 100
+                : ((entryNum - currentLive) / entryNum) * 100;
+              isWin = runningProfit >= 0;
+              closeReason = 'AI Trailing Stop';
+            }
+            
+            if (triggerClose) {
+              // Close trade
+              const rrrParts = activeTrade.rrr.split(':').map(Number);
+              const riskMultiplier = rrrParts[1] || 2.0;
+              
+              const pnlChange = isWin ? (0.20 * riskMultiplier) : -0.20;
+              const pnlVal = isWin 
+                ? `PROFIT (+${(0.20 * riskMultiplier).toFixed(2)}%)` 
+                : `LOSS (-${(0.20).toFixed(2)}%)`;
+              
+              activeTrade.pnl = pnlVal;
+              activeTrade.status = 'closed';
+              activeTrade.time = `Selesai (${closeReason})`;
+              
+              symbolLogs[activeTradeIdx] = activeTrade;
+              
+              // Update performance stats
+              setPerformanceData(prevPerf => {
+                const currentSymbolPerf = { ...prevPerf[sym] };
+                
+                const parsePct = (val) => parseFloat(val.replace(/[+%]/g, '')) || 0;
+                const new1D = parsePct(currentSymbolPerf.profit1D) + pnlChange;
+                const new1W = parsePct(currentSymbolPerf.profit1W) + pnlChange;
+                const new1M = parsePct(currentSymbolPerf.profit1M) + pnlChange;
+                
+                currentSymbolPerf.profit1D = `${new1D >= 0 ? '+' : ''}${new1D.toFixed(2)}%`;
+                currentSymbolPerf.profit1W = `${new1W >= 0 ? '+' : ''}${new1W.toFixed(2)}%`;
+                currentSymbolPerf.profit1M = `${new1M >= 0 ? '+' : ''}${new1M.toFixed(2)}%`;
+                
+                const totalTr = parseInt(currentSymbolPerf.totalTrades) || 0;
+                currentSymbolPerf.totalTrades = `${totalTr + 1} Trades`;
+                
+                return {
+                  ...prevPerf,
+                  [sym]: currentSymbolPerf
+                };
+              });
+              
+              // Spawn a new active trade instantly
+              const tfMap = {
+                'EURUSD': 'M15', 'GBPUSD': 'M30', 'USDJPY': 'H1', 'XAUUSD': 'H4',
+                'AAPL': 'D1', 'TSLA': 'H1', 'BBRI': 'D1', 'TLKM': 'D1'
+              };
+              const tf = tfMap[sym] || 'H1';
+              
+              const distMap = {
+                'EURUSD': 0.00150, 'GBPUSD': 0.00200, 'USDJPY': 0.25, 'XAUUSD': 8.00,
+                'AAPL': 2.00, 'TSLA': 3.50, 'BBRI': 50, 'TLKM': 30
+              };
+              const slDist = distMap[sym] || 0.01;
+              
+              const isNewBuy = Math.random() > 0.5;
+              const typeStr = isNewBuy ? 'BUY' : 'SELL';
+              
+              const rrrValStr = performanceData[sym]?.avgRrr || '1:2.0';
+              const newRrrParts = rrrValStr.split(':').map(Number);
+              const newRiskMultiplier = newRrrParts[1] || 2.0;
+              
+              const newSlNum = isNewBuy ? (currentLive - slDist) : (currentLive + slDist);
+              const newTpNum = isNewBuy ? (currentLive + slDist * newRiskMultiplier) : (currentLive - slDist * newRiskMultiplier);
+              
+              const decs = sym.includes('JPY') ? 2 : sym.includes('BBRI') || sym.includes('TLKM') ? 0 : 5;
+              
+              const baseWinRate = parseFloat(performanceData[sym]?.winRate || '68%');
+              const tradeProb = (baseWinRate + (Math.random() - 0.5) * 4).toFixed(1) + '%';
+              
+              const newTrade = {
+                id: Date.now() + Math.random(),
+                type: typeStr,
+                entry: currentLive.toFixed(decs),
+                sl: newSlNum.toFixed(decs),
+                tp: newTpNum.toFixed(decs),
+                timeframe: tf,
+                rrr: rrrValStr,
+                probability: tradeProb,
+                pnl: 'RUNNING (+0.00%)',
+                status: 'active',
+                time: 'Aktif'
+              };
+              
+              symbolLogs.unshift(newTrade);
+              if (symbolLogs.length > 5) symbolLogs.pop();
+            }
+          } else {
+            // Spawn running trade if empty
+            const tfMap = {
+              'EURUSD': 'M15', 'GBPUSD': 'M30', 'USDJPY': 'H1', 'XAUUSD': 'H4',
+              'AAPL': 'D1', 'TSLA': 'H1', 'BBRI': 'D1', 'TLKM': 'D1'
+            };
+            const tf = tfMap[sym] || 'H1';
+            
+            const distMap = {
+              'EURUSD': 0.00150, 'GBPUSD': 0.00200, 'USDJPY': 0.25, 'XAUUSD': 8.00,
+              'AAPL': 2.00, 'TSLA': 3.50, 'BBRI': 50, 'TLKM': 30
+            };
+            const slDist = distMap[sym] || 0.01;
+            
+            const isNewBuy = Math.random() > 0.5;
+            const typeStr = isNewBuy ? 'BUY' : 'SELL';
+            
+            const rrrValStr = performanceData[sym]?.avgRrr || '1:2.0';
+            const newRrrParts = rrrValStr.split(':').map(Number);
+            const newRiskMultiplier = newRrrParts[1] || 2.0;
+            
+            const newSlNum = isNewBuy ? (currentLive - slDist) : (currentLive + slDist);
+            const newTpNum = isNewBuy ? (currentLive + slDist * newRiskMultiplier) : (currentLive - slDist * newRiskMultiplier);
+            
+            const decs = sym.includes('JPY') ? 2 : sym.includes('BBRI') || sym.includes('TLKM') ? 0 : 5;
+            
+            const baseWinRate = parseFloat(performanceData[sym]?.winRate || '68%');
+            const tradeProb = (baseWinRate + (Math.random() - 0.5) * 4).toFixed(1) + '%';
+            
+            const newTrade = {
+              id: Date.now() + Math.random(),
+              type: typeStr,
+              entry: currentLive.toFixed(decs),
+              sl: newSlNum.toFixed(decs),
+              tp: newTpNum.toFixed(decs),
+              timeframe: tf,
+              rrr: rrrValStr,
+              probability: tradeProb,
+              pnl: 'RUNNING (+0.00%)',
+              status: 'active',
+              time: 'Aktif'
+            };
+            
+            symbolLogs.unshift(newTrade);
+          }
+          
+          nextLogs[sym] = symbolLogs;
+        });
+        
+        return nextLogs;
+      });
+    }, 3000);
     
     return () => clearInterval(interval);
   }, [performanceData, livePrices]);
 
-  if (loading && !prayerSchedule && !weather) {
+    if (loading && !prayerSchedule && !weather) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <motion.div
