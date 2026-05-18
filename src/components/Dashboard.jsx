@@ -876,7 +876,7 @@ INSTRUKSI PENTING:
     };
     
     fetchRates();
-    const interval = setInterval(fetchRates, 10000); // Fetch from TradingView every 10 seconds
+    const interval = setInterval(fetchRates, 3000); // Fetch from TradingView every 3 seconds for maximum precision
     return () => clearInterval(interval);
   }, []);
 
@@ -979,37 +979,7 @@ INSTRUKSI PENTING:
     const interval = setInterval(() => {
       const symbols = ['EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD', 'AAPL', 'TSLA', 'BBRI', 'TLKM'];
       
-      // 1. Tick micro-fluctuations for all live prices to make the market tick live in real-time!
-      setLivePrices(prev => {
-        const nextPrices = { ...prev };
-        
-        symbols.forEach(sym => {
-          const defaultPrices = {
-            'EURUSD': 1.08450, 'GBPUSD': 1.25410, 'USDJPY': 155.60, 'XAUUSD': 2412.50,
-            'AAPL': 182.30, 'TSLA': 174.60, 'BBRI': 4680, 'TLKM': 3200
-          };
-          const basePrice = prev[sym] || defaultPrices[sym];
-          const isFX = sym === 'EURUSD' || sym === 'GBPUSD';
-          const isIndo = sym === 'BBRI' || sym === 'TLKM';
-          const isGold = sym === 'XAUUSD';
-          
-          let fluctuation = 0;
-          if (isFX) {
-            fluctuation = basePrice * (Math.random() - 0.5) * 0.00010; // tiny FX ticks
-          } else if (isGold) {
-            fluctuation = (Math.random() - 0.5) * 0.25; // Gold ticks
-          } else if (isIndo) {
-            fluctuation = Math.round((Math.random() - 0.5) * 10);
-          } else {
-            fluctuation = (Math.random() - 0.5) * 0.12; // Stock ticks
-          }
-          
-          const nextVal = basePrice + fluctuation;
-          nextPrices[sym] = isIndo ? Math.round(nextVal) : parseFloat(nextVal.toFixed(sym.includes('JPY') ? 2 : isGold ? 2 : isFX ? 5 : 2));
-        });
-        
-        return nextPrices;
-      });
+      // 1. We no longer apply random micro-fluctuations. The prices are strictly governed by the TradingView Scanner API to maintain 100% precision.
 
       // 2. Evaluate active trades and boundary crossings for all symbols
       setBotLogs(prevLogs => {
