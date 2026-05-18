@@ -1,0 +1,321 @@
+{
+  "h2h_database": {
+    "arema_vs_psim": { "homeWin": 3, "draw": 2, "awayWin": 1 },
+    "bandung_vs_jakarta": { "homeWin": 4, "draw": 3, "awayWin": 3 },
+    "surabaya_vs_yogyakarta": { "homeWin": 4, "draw": 1, "awayWin": 1 },
+    "borneo_vs_surabaya": { "homeWin": 5, "draw": 2, "awayWin": 3 },
+    "dewa_vs_malut": { "homeWin": 1, "draw": 1, "awayWin": 1 },
+    "arema_vs_surabaya": { "homeWin": 4, "draw": 2, "awayWin": 4 },
+    "bandung_vs_surabaya": { "homeWin": 4, "draw": 2, "awayWin": 3 },
+    "borneo_vs_bandung": { "homeWin": 3, "draw": 3, "awayWin": 3 },
+    "borneo_vs_jakarta": { "homeWin": 4, "draw": 2, "awayWin": 2 },
+    "jakarta_vs_surabaya": { "homeWin": 2, "draw": 5, "awayWin": 3 },
+    "bandung_vs_bali": { "homeWin": 4, "draw": 5, "awayWin": 2 },
+    "surabaya_vs_madura": { "homeWin": 3, "draw": 3, "awayWin": 1 },
+    "biak_vs_malut": { "homeWin": 2, "draw": 1, "awayWin": 2 },
+    "dewa_vs_yogyakarta": { "homeWin": 3, "draw": 2, "awayWin": 1 }
+  },
+  "standings": [
+    {
+      "position": 1,
+      "team_name": "Persib Bandung",
+      "team_logo": "/logos/persib.png",
+      "match_played": 33,
+      "win": 24,
+      "draw": 6,
+      "lose": 3,
+      "point": 78
+    },
+    {
+      "position": 2,
+      "team_name": "Borneo FC Samarinda",
+      "team_logo": "/logos/borneo.svg",
+      "match_played": 33,
+      "win": 23,
+      "draw": 7,
+      "lose": 3,
+      "point": 76
+    },
+    {
+      "position": 3,
+      "team_name": "Persija Jakarta",
+      "team_logo": "/logos/persija.png",
+      "match_played": 33,
+      "win": 20,
+      "draw": 8,
+      "lose": 5,
+      "point": 68
+    },
+    {
+      "position": 4,
+      "team_name": "Persebaya Surabaya",
+      "team_logo": "/logos/persebaya.svg",
+      "match_played": 33,
+      "win": 16,
+      "draw": 7,
+      "lose": 10,
+      "point": 55
+    },
+    {
+      "position": 5,
+      "team_name": "Malut United FC",
+      "team_logo": "/logos/malut.png",
+      "match_played": 33,
+      "win": 15,
+      "draw": 8,
+      "lose": 10,
+      "point": 53
+    },
+    {
+      "position": 6,
+      "team_name": "Dewa United Banten",
+      "team_logo": "/logos/dewa.png",
+      "match_played": 33,
+      "win": 15,
+      "draw": 8,
+      "lose": 10,
+      "point": 53
+    },
+    {
+      "position": 7,
+      "team_name": "Bhayangkara Presisi",
+      "team_logo": "/logos/bhayangkara.svg",
+      "match_played": 33,
+      "win": 14,
+      "draw": 8,
+      "lose": 11,
+      "point": 50
+    },
+    {
+      "position": 8,
+      "team_name": "Bali United FC",
+      "team_logo": "/logos/bali.svg",
+      "match_played": 33,
+      "win": 13,
+      "draw": 9,
+      "lose": 11,
+      "point": 48
+    },
+    {
+      "position": 9,
+      "team_name": "PSM Makassar",
+      "team_logo": "https://upload.wikimedia.org/wikipedia/commons/9/99/Logo_PSM_Makassar_and_2_star.png",
+      "match_played": 33,
+      "win": 12,
+      "draw": 11,
+      "lose": 10,
+      "point": 47
+    },
+    {
+      "position": 10,
+      "team_name": "Persik Kediri",
+      "team_logo": "https://upload.wikimedia.org/wikipedia/commons/3/34/Logo_Persik_Kediri.jpg",
+      "match_played": 33,
+      "win": 12,
+      "draw": 10,
+      "lose": 11,
+      "point": 46
+    },
+    {
+      "position": 11,
+      "team_name": "Persis Solo",
+      "team_logo": "https://upload.wikimedia.org/wikipedia/en/thumb/d/d6/Persis_Solo_logo.svg/250px-Persis_Solo_logo.svg.png",
+      "match_played": 33,
+      "win": 12,
+      "draw": 8,
+      "lose": 13,
+      "point": 44
+    },
+    {
+      "position": 12,
+      "team_name": "PSBS Biak",
+      "team_logo": "https://upload.wikimedia.org/wikipedia/commons/4/44/PSBS_Biak_crest.jpg",
+      "match_played": 33,
+      "win": 11,
+      "draw": 8,
+      "lose": 14,
+      "point": 41
+    },
+    {
+      "position": 13,
+      "team_name": "Barito Putera",
+      "team_logo": "https://upload.wikimedia.org/wikipedia/en/thumb/4/46/Barito_Putera_logo-en.svg/250px-Barito_Putera_logo-en.svg.png",
+      "match_played": 33,
+      "win": 9,
+      "draw": 11,
+      "lose": 13,
+      "point": 38
+    },
+    {
+      "position": 14,
+      "team_name": "PSS Sleman",
+      "team_logo": "https://upload.wikimedia.org/wikipedia/en/thumb/c/c9/PSS_Sleman_logo.svg/250px-PSS_Sleman_logo.svg.png",
+      "match_played": 33,
+      "win": 9,
+      "draw": 8,
+      "lose": 16,
+      "point": 35
+    },
+    {
+      "position": 15,
+      "team_name": "Semen Padang",
+      "team_logo": "https://upload.wikimedia.org/wikipedia/en/thumb/5/59/Semen_Padang_FC_logo.svg/250px-Semen_Padang_FC_logo.svg.png",
+      "match_played": 33,
+      "win": 8,
+      "draw": 8,
+      "lose": 17,
+      "point": 32
+    },
+    {
+      "position": 16,
+      "team_name": "Arema FC",
+      "team_logo": "https://upload.wikimedia.org/wikipedia/en/thumb/c/c2/Arema_FC_2017_logo.svg/250px-Arema_FC_2017_logo.svg.png",
+      "match_played": 33,
+      "win": 8,
+      "draw": 7,
+      "lose": 18,
+      "point": 31
+    },
+    {
+      "position": 17,
+      "team_name": "Madura United FC",
+      "team_logo": "https://upload.wikimedia.org/wikipedia/en/9/9d/Madura_United_F.C._logo.png",
+      "match_played": 33,
+      "win": 7,
+      "draw": 8,
+      "lose": 18,
+      "point": 29
+    },
+    {
+      "position": 18,
+      "team_name": "RANS Nusantara",
+      "team_logo": "https://upload.wikimedia.org/wikipedia/en/thumb/5/5e/RANS_Cilegon_F.C._logo.svg/250px-RANS_Cilegon_F.C._logo.svg.png",
+      "match_played": 33,
+      "win": 6,
+      "draw": 8,
+      "lose": 19,
+      "point": 26
+    }
+  ],
+  "top_scorers": [
+    {
+      "player_name": "David da Silva",
+      "team_name": "Malut United FC",
+      "player_photo": "https://images.weserv.nl/?url=https://adt-persib-app-production.s3.ap-southeast-1.amazonaws.com/medium_david_DS_24_b6a272d82f.jpg",
+      "goals": 22
+    },
+    {
+      "player_name": "Alex Martins",
+      "team_name": "Dewa United Banten",
+      "player_photo": "https://images.weserv.nl/?url=https://statik.tempo.co/data/2023/10/10/id_1244067/1244067_720.jpg",
+      "goals": 20
+    },
+    {
+      "player_name": "Mariano Peralta",
+      "team_name": "Borneo FC",
+      "player_photo": "https://images.weserv.nl/?url=https://www.footballdatabase.eu/images/photos/players/a_444/444022.jpg",
+      "goals": 18
+    },
+    {
+      "player_name": "Dalberto",
+      "team_name": "Arema FC",
+      "player_photo": "https://images.weserv.nl/?url=https://img.a.transfermarkt.technology/portrait/big/519891-1754636042.png?lm=1",
+      "goals": 16
+    },
+    {
+      "player_name": "Emaxwell Souza",
+      "team_name": "Persija Jakarta",
+      "player_photo": "https://images.weserv.nl/?url=https://img.a.transfermarkt.technology/portrait/big/357091-1678908837.jpg?lm=1",
+      "goals": 15
+    }
+  ],
+  "upcoming_matches": [
+    {
+      "home_team": "Persib Bandung",
+      "home_logo": "/logos/persib.png",
+      "away_team": "Persija Jakarta",
+      "away_logo": "/logos/persija.png",
+      "date": "Sabtu, 24 Mei 2026",
+      "time": "19:00 WIB",
+      "stadium": "Stadion Gelora Bandung Lautan Api"
+    },
+    {
+      "home_team": "Borneo FC Samarinda",
+      "home_logo": "/logos/borneo.svg",
+      "away_team": "Persebaya Surabaya",
+      "away_logo": "/logos/persebaya.svg",
+      "date": "Sabtu, 24 Mei 2026",
+      "time": "15:30 WIB",
+      "stadium": "Stadion Batakan"
+    },
+    {
+      "home_team": "Malut United FC",
+      "home_logo": "/logos/malut.png",
+      "away_team": "Dewa United Banten",
+      "away_logo": "/logos/dewa.png",
+      "date": "Minggu, 25 Mei 2026",
+      "time": "19:00 WIB",
+      "stadium": "Stadion Gelora Kie Raha"
+    },
+    {
+      "home_team": "Bali United FC",
+      "home_logo": "/logos/bali.svg",
+      "away_team": "Bhayangkara Presisi",
+      "away_logo": "/logos/bhayangkara.svg",
+      "date": "Minggu, 25 Mei 2026",
+      "time": "19:00 WIB",
+      "stadium": "Stadion Kapten I Wayan Dipta"
+    },
+    {
+      "home_team": "Persebaya Surabaya",
+      "home_logo": "/logos/persebaya.svg",
+      "away_team": "Madura United FC",
+      "away_logo": "https://upload.wikimedia.org/wikipedia/en/9/9d/Madura_United_F.C._logo.png",
+      "date": "Sabtu, 24 Mei 2026",
+      "time": "19:00 WIB",
+      "stadium": "Stadion Gelora Bung Tomo"
+    }
+  ],
+  "past_results": [
+    {
+      "home_team": "PSM Makassar",
+      "home_logo": "https://upload.wikimedia.org/wikipedia/commons/9/99/Logo_PSM_Makassar_and_2_star.png",
+      "away_team": "Persib Bandung",
+      "away_logo": "/logos/persib.png",
+      "home_score": 1,
+      "away_score": 2,
+      "date": "Minggu, 17 Mei 2026",
+      "stadium": "Stadion Gelora B.J. Habibie"
+    },
+    {
+      "home_team": "Persik Kediri",
+      "home_logo": "https://upload.wikimedia.org/wikipedia/commons/3/34/Logo_Persik_Kediri.jpg",
+      "away_team": "Persija Jakarta",
+      "away_logo": "/logos/persija.png",
+      "home_score": 1,
+      "away_score": 3,
+      "date": "Sabtu, 16 Mei 2026",
+      "stadium": "Stadion Brawijaya"
+    },
+    {
+      "home_team": "Persis Solo",
+      "home_logo": "https://upload.wikimedia.org/wikipedia/en/thumb/d/d6/Persis_Solo_logo.svg/250px-Persis_Solo_logo.svg.png",
+      "away_team": "Dewa United Banten",
+      "away_logo": "/logos/dewa.png",
+      "home_score": 1,
+      "away_score": 0,
+      "date": "Sabtu, 16 Mei 2026",
+      "stadium": "Stadion Manahan"
+    },
+    {
+      "home_team": "Semen Padang",
+      "home_logo": "https://upload.wikimedia.org/wikipedia/en/thumb/5/59/Semen_Padang_FC_logo.svg/250px-Semen_Padang_FC_logo.svg.png",
+      "away_team": "Persebaya Surabaya",
+      "away_logo": "/logos/persebaya.svg",
+      "home_score": 0,
+      "away_score": 7,
+      "date": "Jumat, 15 Mei 2026",
+      "stadium": "Stadion Gelora Haji Agus Salim"
+    }
+  ]
+}
