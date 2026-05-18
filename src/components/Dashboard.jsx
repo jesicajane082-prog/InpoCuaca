@@ -261,39 +261,29 @@ function NativeTradingViewChart({ symbol }) {
 
 // Native TradingView Technical Gauge Component
 function NativeTechnicalGauge({ symbol }) {
-  const containerRef = React.useRef(null);
+  const settings = {
+    interval: '1D',
+    width: '100%',
+    isTransparent: false,
+    height: 320,
+    symbol: symbol,
+    showIntervalTabs: true,
+    displayMode: 'single',
+    locale: 'id',
+    colorTheme: 'light'
+  };
 
-  React.useEffect(() => {
-    if (containerRef.current) {
-      containerRef.current.innerHTML = '';
-      
-      // Re-create the required inner widget div for TradingView script targeting
-      const widgetDiv = document.createElement('div');
-      widgetDiv.className = 'tradingview-widget-container__widget';
-      containerRef.current.appendChild(widgetDiv);
-
-      const script = document.createElement('script');
-      script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-technical-analysis.js';
-      script.type = 'text/javascript';
-      script.async = true;
-      script.innerHTML = JSON.stringify({
-        interval: '1D',
-        width: '100%',
-        isTransparent: false,
-        height: 320,
-        symbol: symbol,
-        showIntervalTabs: true,
-        displayMode: 'single',
-        locale: 'id',
-        colorTheme: 'light'
-      });
-
-      containerRef.current.appendChild(script);
-    }
-  }, [symbol]);
+  const iframeUrl = `https://s.tradingview.com/embed-widget/technical-analysis/?locale=id#${encodeURIComponent(JSON.stringify(settings))}`;
 
   return (
-    <div ref={containerRef} className="tradingview-widget-container w-full h-[320px]" />
+    <div className="tradingview-widget-container w-full h-[320px] rounded-2xl overflow-hidden border border-slate-100/60 bg-white">
+      <iframe
+        title={`technical-gauge-${symbol}`}
+        src={iframeUrl}
+        style={{ width: '100%', height: '320px', border: 'none', overflow: 'hidden' }}
+        scrolling="no"
+      />
+    </div>
   );
 }
 
