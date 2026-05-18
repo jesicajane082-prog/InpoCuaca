@@ -590,16 +590,26 @@ export default function Dashboard() {
             animate={{ x: 0, opacity: 1 }}
             className="flex items-center gap-2"
           >
-            <MapPin className="w-4 h-4 text-slate-300" />
-            <select
-              value={city}
-              onChange={(e) => setCity(e.target.value)}
-              className="bg-white border border-slate-200 px-3 py-2 rounded-lg text-sm outline-none hover:border-slate-300 transition-all cursor-pointer focus:ring-2 focus:ring-slate-100 font-medium"
+            <div className="flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-slate-300" />
+              <select
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                className="bg-white border border-slate-200 px-3 py-2 rounded-lg text-sm outline-none hover:border-slate-300 transition-all cursor-pointer focus:ring-2 focus:ring-slate-100 font-medium"
+              >
+                {CITIES.map(c => (
+                  <option key={c.id} value={c.id}>{c.label}</option>
+                ))}
+              </select>
+            </div>
+            <button
+              onClick={() => fetchData(true)}
+              disabled={loading}
+              className="p-2 bg-white hover:bg-slate-50 active:bg-slate-100 border border-slate-200 rounded-lg text-slate-500 hover:text-slate-700 transition-all shadow-sm focus:ring-2 focus:ring-slate-100 flex items-center justify-center disabled:opacity-50"
+              title="Segarkan data"
             >
-              {CITIES.map(c => (
-                <option key={c.id} value={c.id}>{c.label}</option>
-              ))}
-            </select>
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-slate-400' : 'text-slate-400'}`} />
+            </button>
           </motion.div>
         </header>
 
@@ -765,36 +775,7 @@ export default function Dashboard() {
               )}
             </motion.section>
 
-            {/* Sources & Status Card */}
-            <motion.section
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="bg-white border border-slate-200 rounded-2xl p-6"
-            >
-              <h3 className="text-xs font-bold text-slate-400 mb-5">Indikator data</h3>
-              <div className="space-y-4">
-                {[
-                  { label: 'Informasi gempa', src: 'BMKG' },
-                  { label: 'Jadwal keagamaan', src: 'JadwalSholat.org' },
-                  { label: 'Prediksi cuaca', src: 'Open-Meteo' },
-                  { label: 'Statistik liga', src: 'Liga Indo API' }
-                ].map((item, idx) => (
-                  <div key={idx} className="flex items-center justify-between group">
-                    <span className="text-xs font-medium text-slate-500 group-hover:text-slate-800 transition-colors">{item.label}</span>
-                    <span className="text-[10px] font-bold text-slate-400 tracking-wide uppercase">{item.src}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-8 pt-6 border-t border-slate-50">
-                <button
-                  onClick={() => fetchData(true)}
-                  className="w-full py-3 bg-slate-100 hover:bg-slate-200 border border-slate-200/50 text-slate-700 text-xs font-semibold rounded-xl transition-all flex items-center justify-center gap-2.5 shadow-sm group"
-                >
-                  <RefreshCw className="w-3.5 h-3.5 text-slate-400 group-hover:rotate-180 transition-transform duration-500" />
-                  Segarkan informasi
-                </button>
-              </div>
-            </motion.section>
+
           </div>
         </div>
 
