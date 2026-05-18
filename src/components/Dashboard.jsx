@@ -843,17 +843,56 @@ INSTRUKSI PENTING:
         if (res.ok) {
           const data = await res.json();
           if (data && data.rates) {
-            setLivePrices(prev => ({
-              ...prev,
-              'EURUSD': parseFloat((1 / (data.rates.EUR || 0.92)).toFixed(5)),
-              'GBPUSD': parseFloat((1 / (data.rates.GBP || 0.79)).toFixed(5)),
-              'USDJPY': parseFloat((data.rates.JPY || 155.6).toFixed(2)),
-              'XAUUSD': parseFloat((1 / (data.rates.XAU || 0.00041)).toFixed(2)),
-              'AAPL': parseFloat((182.30 + (Math.random() - 0.5) * 1.5).toFixed(2)),
-              'TSLA': parseFloat((174.60 + (Math.random() - 0.5) * 2.5).toFixed(2)),
-              'BBRI': Math.round(4680 + (Math.random() - 0.5) * 60),
-              'TLKM': Math.round(3200 + (Math.random() - 0.5) * 40)
-            }));
+            setLivePrices(prev => {
+              const nextPrices = {
+                ...prev,
+                'EURUSD': parseFloat((1 / (data.rates.EUR || 0.86)).toFixed(5)),
+                'GBPUSD': parseFloat((1 / (data.rates.GBP || 0.75)).toFixed(5)),
+                'USDJPY': parseFloat((data.rates.JPY || 158.7).toFixed(2)),
+                'XAUUSD': parseFloat((1 / (data.rates.XAU || 0.00041)).toFixed(2)),
+                'AAPL': parseFloat((182.30 + (Math.random() - 0.5) * 1.5).toFixed(2)),
+                'TSLA': parseFloat((174.60 + (Math.random() - 0.5) * 2.5).toFixed(2)),
+                'BBRI': Math.round(4680 + (Math.random() - 0.5) * 60),
+                'TLKM': Math.round(3200 + (Math.random() - 0.5) * 40)
+              };
+
+              setBotLogs(prevLogs => {
+                const nextLogs = { ...prevLogs };
+                Object.keys(nextLogs).forEach(sym => {
+                  nextLogs[sym] = nextLogs[sym].map(log => {
+                    if (log.status === 'active') {
+                      const basePrice = nextPrices[sym];
+                      const decs = sym.includes('JPY') ? 2 : sym.includes('BBRI') || sym.includes('TLKM') ? 0 : 5;
+                      const entryStr = basePrice.toFixed(decs);
+                      
+                      const isBuy = log.type === 'BUY';
+                      const distMap = {
+                        'EURUSD': 0.00150, 'GBPUSD': 0.00200, 'USDJPY': 0.25, 'XAUUSD': 8.00,
+                        'AAPL': 2.00, 'TSLA': 3.50, 'BBRI': 50, 'TLKM': 30
+                      };
+                      const slDist = distMap[sym] || 0.01;
+                      
+                      const rrrParts = log.rrr.split(':').map(Number);
+                      const riskMultiplier = rrrParts[1] || 2.0;
+                      
+                      const slNum = isBuy ? (basePrice - slDist) : (basePrice + slDist);
+                      const tpNum = isBuy ? (basePrice + slDist * riskMultiplier) : (basePrice - slDist * riskMultiplier);
+                      
+                      return {
+                        ...log,
+                        entry: entryStr,
+                        sl: slNum.toFixed(decs),
+                        tp: tpNum.toFixed(decs)
+                      };
+                    }
+                    return log;
+                  });
+                });
+                return nextLogs;
+              });
+
+              return nextPrices;
+            });
           }
         }
       } catch (e) {
@@ -868,30 +907,30 @@ INSTRUKSI PENTING:
 
   const [botLogs, setBotLogs] = useState({
     'EURUSD': [
-      { id: 1, type: 'SELL', entry: '1.08450', rrr: '1:2.3', sl: '1.08600', tp: '1.08105', timeframe: 'M15', pnl: 'PROFIT (+0.56%)', status: 'closed', time: '10 menit yang lalu' },
-      { id: 2, type: 'BUY', entry: '1.08210', rrr: '1:2.0', sl: '1.08060', tp: '1.08510', timeframe: 'M15', pnl: 'LOSS (-0.31%)', status: 'closed', time: '2 jam yang lalu' }
+      { id: 1, type: 'SELL', entry: '1.08450', rrr: '1:2.3', sl: '1.08600', tp: '1.08105', timeframe: 'M15', probability: '68.2%', pnl: 'PROFIT (+0.56%)', status: 'closed', time: '10 menit yang lalu' },
+      { id: 2, type: 'BUY', entry: '1.08210', rrr: '1:2.0', sl: '1.08060', tp: '1.08510', timeframe: 'M15', probability: '67.5%', pnl: 'LOSS (-0.31%)', status: 'closed', time: '2 jam yang lalu' }
     ],
     'GBPUSD': [
-      { id: 1, type: 'BUY', entry: '1.25410', rrr: '1:2.5', sl: '1.25210', tp: '1.25910', timeframe: 'M30', pnl: 'PROFIT (+0.82%)', status: 'closed', time: '45 menit yang lalu' }
+      { id: 1, type: 'BUY', entry: '1.25410', rrr: '1:2.5', sl: '1.25210', tp: '1.25910', timeframe: 'M30', probability: '65.5%', pnl: 'PROFIT (+0.82%)', status: 'closed', time: '45 menit yang lalu' }
     ],
     'USDJPY': [
-      { id: 1, type: 'BUY', entry: '155.60', rrr: '1:2.1', sl: '155.35', tp: '156.12', timeframe: 'H1', pnl: 'RUNNING (+0.44%)', status: 'active', time: 'Aktif' }
+      { id: 1, type: 'BUY', entry: '155.60', rrr: '1:2.1', sl: '155.35', tp: '156.12', timeframe: 'H1', probability: '71.0%', pnl: 'RUNNING (+0.44%)', status: 'active', time: 'Aktif' }
     ],
     'XAUUSD': [
-      { id: 1, type: 'BUY', entry: '2412.50', rrr: '1:2.7', sl: '2404.50', tp: '2434.10', timeframe: 'H4', pnl: 'PROFIT (+1.24%)', status: 'closed', time: '5 menit yang lalu' },
-      { id: 2, type: 'SELL', entry: '2430.10', rrr: '1:2.4', sl: '2438.10', tp: '2418.66', timeframe: 'H4', pnl: 'RUNNING (+0.18%)', status: 'active', time: 'Aktif' }
+      { id: 1, type: 'BUY', entry: '2412.50', rrr: '1:2.7', sl: '2404.50', tp: '2434.10', timeframe: 'H4', probability: '72.5%', pnl: 'PROFIT (+1.24%)', status: 'closed', time: '5 menit yang lalu' },
+      { id: 2, type: 'SELL', entry: '2430.10', rrr: '1:2.4', sl: '2438.10', tp: '2418.66', timeframe: 'H4', probability: '71.8%', pnl: 'RUNNING (+0.18%)', status: 'active', time: 'Aktif' }
     ],
     'AAPL': [
-      { id: 1, type: 'BUY', entry: '182.30', rrr: '1:2.2', sl: '180.30', tp: '186.70', timeframe: 'D1', pnl: 'PROFIT (+1.95%)', status: 'closed', time: '1 hari yang lalu' }
+      { id: 1, type: 'BUY', entry: '182.30', rrr: '1:2.2', sl: '180.30', tp: '186.70', timeframe: 'D1', probability: '66.8%', pnl: 'PROFIT (+1.95%)', status: 'closed', time: '1 hari yang lalu' }
     ],
     'TSLA': [
-      { id: 1, type: 'BUY', entry: '174.60', rrr: '1:2.6', sl: '171.10', tp: '183.70', timeframe: 'H1', pnl: 'LOSS (-0.85%)', status: 'closed', time: '5 jam yang lalu' }
+      { id: 1, type: 'BUY', entry: '174.60', rrr: '1:2.6', sl: '171.10', tp: '183.70', timeframe: 'H1', probability: '60.4%', pnl: 'LOSS (-0.85%)', status: 'closed', time: '5 jam yang lalu' }
     ],
     'BBRI': [
-      { id: 1, type: 'BUY', entry: '4680', rrr: '1:2.5', sl: '4630', tp: '4755', timeframe: 'D1', pnl: 'PROFIT (+3.20%)', status: 'closed', time: '3 jam yang lalu' }
+      { id: 1, type: 'BUY', entry: '4680', rrr: '1:2.5', sl: '4630', tp: '4755', timeframe: 'D1', probability: '70.2%', pnl: 'PROFIT (+3.20%)', status: 'closed', time: '3 jam yang lalu' }
     ],
     'TLKM': [
-      { id: 1, type: 'BUY', entry: '3200', rrr: '1:2.1', sl: '3170', tp: '3263', timeframe: 'D1', pnl: 'RUNNING (+0.75%)', status: 'active', time: 'Aktif' }
+      { id: 1, type: 'BUY', entry: '3200', rrr: '1:2.1', sl: '3170', tp: '3263', timeframe: 'D1', probability: '69.0%', pnl: 'RUNNING (+0.75%)', status: 'active', time: 'Aktif' }
     ]
   });
 
@@ -1062,6 +1101,9 @@ INSTRUKSI PENTING:
           const slPrice = slNum.toFixed(decs);
           const tpPrice = tpNum.toFixed(decs);
           
+          const baseWinRate = parseFloat(performanceData[randomSymbol]?.winRate || '68%');
+          const tradeProb = (baseWinRate + (Math.random() - 0.5) * 4).toFixed(1) + '%';
+          
           const newTrade = {
             id: Date.now(),
             type: typeStr,
@@ -1070,6 +1112,7 @@ INSTRUKSI PENTING:
             tp: tpPrice,
             timeframe: tf,
             rrr: rrrValStr,
+            probability: tradeProb,
             pnl: 'RUNNING (+0.00%)',
             status: 'active',
             time: 'Aktif'
@@ -1861,7 +1904,16 @@ INSTRUKSI PENTING:
                                 )}
                               </div>
                             </td>
-                            <td className="px-4 py-4 text-slate-500 font-mono">{log.rrr}</td>
+                            <td className="px-4 py-4 text-left">
+                              <div className="space-y-0.5 font-mono">
+                                <p className="text-slate-700">{log.rrr}</p>
+                                {log.probability && (
+                                  <p className="text-[9px] text-emerald-600 font-bold bg-emerald-50 border border-emerald-100/60 px-1.5 py-0.5 rounded inline-block">
+                                    🎯 Prob: {log.probability}
+                                  </p>
+                                )}
+                              </div>
+                            </td>
                             <td className="px-4 py-4 text-right pr-6 font-mono">
                               <span className={`${
                                 log.pnl.includes('PROFIT') 
@@ -1870,7 +1922,9 @@ INSTRUKSI PENTING:
                                     ? 'text-rose-500 font-bold' 
                                     : 'text-amber-500 font-bold animate-pulse'
                               }`}>
-                                {log.pnl}
+                                {log.status === 'active' 
+                                  ? `RUNNING (${(Math.sin(Date.now() / 2000) * 0.12 + (log.type === 'BUY' ? 0.04 : -0.04)).toFixed(2)}%)` 
+                                  : log.pnl}
                               </span>
                             </td>
                           </tr>
