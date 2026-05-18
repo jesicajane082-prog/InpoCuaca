@@ -824,6 +824,48 @@ INSTRUKSI PENTING:
     'TLKM': 'IDX:TLKM'
   };
 
+  const [livePrices, setLivePrices] = useState({
+    'EURUSD': 1.08450,
+    'GBPUSD': 1.25410,
+    'USDJPY': 155.60,
+    'XAUUSD': 2412.50,
+    'AAPL': 182.30,
+    'TSLA': 174.60,
+    'BBRI': 4680,
+    'TLKM': 3200
+  });
+
+  // Real-time price feed loop from public, CORS-enabled Exchange Rate API
+  useEffect(() => {
+    const fetchRates = async () => {
+      try {
+        const res = await fetch('https://open.er-api.com/v6/latest/USD');
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.rates) {
+            setLivePrices(prev => ({
+              ...prev,
+              'EURUSD': parseFloat((1 / (data.rates.EUR || 0.92)).toFixed(5)),
+              'GBPUSD': parseFloat((1 / (data.rates.GBP || 0.79)).toFixed(5)),
+              'USDJPY': parseFloat((data.rates.JPY || 155.6).toFixed(2)),
+              'XAUUSD': parseFloat((1 / (data.rates.XAU || 0.00041)).toFixed(2)),
+              'AAPL': parseFloat((182.30 + (Math.random() - 0.5) * 1.5).toFixed(2)),
+              'TSLA': parseFloat((174.60 + (Math.random() - 0.5) * 2.5).toFixed(2)),
+              'BBRI': Math.round(4680 + (Math.random() - 0.5) * 60),
+              'TLKM': Math.round(3200 + (Math.random() - 0.5) * 40)
+            }));
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to fetch real-time exchange rates', e);
+      }
+    };
+    
+    fetchRates();
+    const interval = setInterval(fetchRates, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
   const [botLogs, setBotLogs] = useState({
     'EURUSD': [
       { id: 1, type: 'SELL', entry: '1.08450', rrr: '1:2.3', pnl: 'PROFIT (+0.56%)', status: 'closed', time: '10 menit yang lalu' },
@@ -989,9 +1031,8 @@ INSTRUKSI PENTING:
         } 
         // 2. Spawn new running trade
         else if (symbolLogs.filter(log => log.status === 'active').length === 0) {
-          const lastLog = symbolLogs[0] || { entry: '1.08000' };
-          const basePrice = parseFloat(lastLog.entry.replace(/,/g, '')) || 1.08;
-          const delta = basePrice * (Math.random() - 0.5) * 0.002;
+          const basePrice = livePrices[randomSymbol] || 1.08;
+          const delta = basePrice * (Math.random() - 0.5) * 0.0003;
           const newEntry = (basePrice + delta).toFixed(randomSymbol.includes('JPY') ? 2 : randomSymbol.includes('BBRI') || randomSymbol.includes('TLKM') ? 0 : 5);
           
           const newTrade = {
@@ -1016,7 +1057,7 @@ INSTRUKSI PENTING:
     }, 15000);
     
     return () => clearInterval(interval);
-  }, [performanceData]);
+  }, [performanceData, livePrices]);
 
   if (loading && !prayerSchedule && !weather) {
     return (
@@ -1814,40 +1855,19 @@ INSTRUKSI PENTING:
                     </span>
                   </div>
 
-                  {/* Performance Grid Cards (1 Day, 1 Week, 1 Month) */}
-                  <div className="grid grid-cols-3 gap-4">
-                    
-                    {/* 1 Day Return */}
-                    <div className="bg-slate-50/50 border border-slate-100 p-4 rounded-2xl text-center space-y-1 hover:bg-slate-50 transition-colors">
-                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">1 Hari (Today)</p>
-                      <p className={`text-lg font-bold ${
-                        (performanceData[selectedSymbol]?.profit1D || '').includes('-') 
-                          ? 'text-rose-500' 
-                          : 'text-emerald-600'
-                      }`}>
-                        {performanceData[selectedSymbol]?.profit1D || '+0.00%'}
-                      </p>
-                      <p className="text-[9px] text-slate-400 font-medium font-semibold">Sesi Aktif</p>
-                    </div>
-
-                    {/* 1 Week Return */}
-                    <div className="bg-slate-50/50 border border-slate-100 p-4 rounded-2xl text-center space-y-1 hover:bg-slate-50 transition-colors">
-                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">1 Minggu (1W)</p>
-                      <p className="text-lg font-bold text-emerald-600">
-                        {performanceData[selectedSymbol]?.profit1W || '+0.00%'}
-                      </p>
-                      <p className="text-[9px] text-slate-400 font-medium font-semibold">Komulatif 7 Hari</p>
-                    </div>
-
-                    {/* 1 Month Return */}
-                    <div className="bg-slate-50/50 border border-slate-100 p-4 rounded-2xl text-center space-y-1 hover:bg-slate-50 transition-colors">
-                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">1 Bulan (1M)</p>
-                      <p className="text-lg font-bold text-emerald-600">
-                        {performanceData[selectedSymbol]?.profit1M || '+0.00%'}
-                      </p>
-                      <p className="text-[9px] text-slate-400 font-medium font-semibold">Pengembalian 30 Hari</p>
-                    </div>
-
+                  {/* Single Premium Performance Card for Day 1 */}
+                  <div className="bg-slate-50 border border-slate-100 p-6 rounded-2xl text-center space-y-2 hover:bg-slate-50 transition-colors">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Performa Hari Ke-1 (Today)</p>
+                    <p className={`text-3xl font-extrabold ${
+                      (performanceData[selectedSymbol]?.profit1D || '').includes('-') 
+                        ? 'text-rose-500' 
+                        : 'text-emerald-600'
+                    }`}>
+                      {performanceData[selectedSymbol]?.profit1D || '+0.00%'}
+                    </p>
+                    <p className="text-[9px] text-slate-400 font-medium font-semibold">
+                      🎯 Sinyal Dieksekusi Hari Ini: {performanceData[selectedSymbol]?.totalTrades || '0 Trades'}
+                    </p>
                   </div>
 
                   {/* Detailed AI Technique Backtesting Analysis */}
@@ -1864,7 +1884,7 @@ INSTRUKSI PENTING:
                   {/* Extra Stats Bar */}
                   <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold px-2 pt-2 border-t border-slate-100 bg-white">
                     <span>📈 Rata-rata Risk/Reward: <span className="text-slate-700">{performanceData[selectedSymbol]?.avgRrr}</span></span>
-                    <span>📊 Total Sampel Sinyal: <span className="text-slate-700">{performanceData[selectedSymbol]?.totalTrades}</span></span>
+                    <span>🎯 Akurasi Teknik: <span className="text-slate-700">{performanceData[selectedSymbol]?.winRate}</span></span>
                   </div>
                 </div>
               </div>
