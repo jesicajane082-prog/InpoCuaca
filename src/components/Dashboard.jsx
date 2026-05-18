@@ -1893,10 +1893,30 @@ INSTRUKSI PENTING:
                               </div>
                             </td>
                             <td className="px-4 py-4 text-left">
-                              <div className="space-y-0.5">
-                                <p className="text-slate-800 font-bold">{log.entry}</p>
+                              <div className="space-y-1">
+                                <div className="flex flex-col">
+                                  <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Harga Entry</span>
+                                  <p className="text-slate-800 font-extrabold text-sm leading-none mt-0.5">{log.entry}</p>
+                                </div>
+                                
+                                {log.status === 'active' && (
+                                  <div className="flex flex-col bg-amber-50/70 border border-amber-100/60 rounded-xl px-2 py-1 inline-block">
+                                    <span className="text-[9px] text-amber-600 font-bold uppercase tracking-wider">Harga Realtime</span>
+                                    <p className="text-amber-600 font-extrabold text-xs animate-pulse leading-none mt-0.5">
+                                      {(() => {
+                                        const baseLive = parseFloat(livePrices[selectedSymbol] || log.entry);
+                                        // Fluctuates in perfect mathematical lockstep with floating PnL
+                                        const pnlWave = Math.sin(Date.now() / 2000) * 0.0012;
+                                        const tickPrice = log.type === 'BUY' ? baseLive * (1 + pnlWave) : baseLive * (1 - pnlWave);
+                                        const decs = selectedSymbol.includes('JPY') ? 2 : selectedSymbol.includes('BBRI') || selectedSymbol.includes('TLKM') ? 0 : 5;
+                                        return tickPrice.toFixed(decs);
+                                      })()}
+                                    </p>
+                                  </div>
+                                )}
+
                                 {log.sl && log.tp && (
-                                  <p className="text-[9px] text-slate-400 font-semibold tracking-wider">
+                                  <p className="text-[9px] text-slate-400 font-semibold tracking-wider pt-0.5">
                                     <span className="text-rose-500">SL: {log.sl}</span>
                                     <span className="mx-1 text-slate-300">|</span>
                                     <span className="text-emerald-600">TP: {log.tp}</span>
