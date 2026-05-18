@@ -243,6 +243,8 @@ export default function Dashboard() {
   const hfToken = import.meta.env.VITE_HF_TOKEN || '';
   const [selectedModel, setSelectedModel] = useState('Qwen/Qwen2.5-72B-Instruct');
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
+  const [isCityDropdownOpen, setIsCityDropdownOpen] = useState(false);
+  const [citySearchQuery, setCitySearchQuery] = useState('');
 
 
   const handleSendMessage = async (customMessage = null) => {
@@ -701,18 +703,104 @@ INSTRUKSI PENTING:
           <motion.div
             initial={{ x: 20, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
-            className="flex items-center gap-2"
+            className="flex items-center gap-2.5 z-30"
           >
             <MapPin className="w-4 h-4 text-slate-300" />
-            <select
-              value={city}
-              onChange={(e) => setCity(e.target.value)}
-              className="bg-white border border-slate-200 px-3 py-2 rounded-lg text-sm outline-none hover:border-slate-300 transition-all cursor-pointer focus:ring-2 focus:ring-slate-100 font-medium"
-            >
-              {CITIES.map(c => (
-                <option key={c.id} value={c.id}>{c.label}</option>
-              ))}
-            </select>
+            
+            {/* Custom City Dropdown with Instant Search */}
+            <div className="relative">
+              <button
+                onClick={() => setIsCityDropdownOpen(!isCityDropdownOpen)}
+                className="flex items-center gap-2 bg-white border border-slate-200 hover:border-slate-300 px-4 py-2 rounded-xl text-sm font-bold text-slate-600 hover:text-slate-900 transition-all shadow-sm active:scale-95"
+              >
+                <span>{CITIES.find(c => c.id === city)?.label || 'Pilih Kota'}</span>
+                <svg 
+                  xmlns="http://www.w3.org/2000/svg" 
+                  width="14" 
+                  height="14" 
+                  viewBox="0 0 24 24" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  strokeWidth="3" 
+                  strokeLinecap="round" 
+                  strokeLinejoin="round" 
+                  className={`lucide lucide-chevron-down w-3.5 h-3.5 text-slate-400 transition-transform duration-300 ${isCityDropdownOpen ? 'rotate-180' : ''}`}
+                >
+                  <path d="m6 9 6 6 6-6"/>
+                </svg>
+              </button>
+
+              <AnimatePresence>
+                {isCityDropdownOpen && (
+                  <>
+                    {/* Invisible overlay click listener to close dropdown */}
+                    <div 
+                      className="fixed inset-0 z-40" 
+                      onClick={() => {
+                        setIsCityDropdownOpen(false);
+                        setCitySearchQuery('');
+                      }}
+                    />
+                    <motion.div
+                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute right-0 top-full mt-2 w-64 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden z-50 flex flex-col text-left"
+                    >
+                      {/* Search Bar inside dropdown */}
+                      <div className="p-3 border-b border-slate-100 bg-slate-50/50">
+                        <input
+                          type="text"
+                          placeholder="Cari kota..."
+                          value={citySearchQuery}
+                          onChange={(e) => setCitySearchQuery(e.target.value)}
+                          className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs outline-none hover:border-slate-300 focus:ring-2 focus:ring-slate-100 font-bold text-slate-700"
+                          onClick={(e) => e.stopPropagation()} // prevent closing when clicking input
+                        />
+                      </div>
+
+                      {/* Cities list with custom scroll */}
+                      <div className="max-h-60 overflow-y-auto py-1.5 scroll-smooth">
+                        {CITIES.filter(c => 
+                          c.label.toLowerCase().includes(citySearchQuery.toLowerCase())
+                        ).length > 0 ? (
+                          CITIES.filter(c => 
+                            c.label.toLowerCase().includes(citySearchQuery.toLowerCase())
+                          ).map((c) => {
+                            const isActive = city === c.id;
+                            return (
+                              <button
+                                key={c.id}
+                                onClick={() => {
+                                  setCity(c.id);
+                                  setIsCityDropdownOpen(false);
+                                  setCitySearchQuery('');
+                                }}
+                                className={`w-full px-4 py-2.5 text-xs font-bold flex items-center justify-between transition-colors text-left ${
+                                  isActive 
+                                    ? 'bg-slate-50 text-slate-900' 
+                                    : 'text-slate-600 hover:bg-slate-50/50 hover:text-slate-900'
+                                }`}
+                              >
+                                <span>{c.label}</span>
+                                {isActive && (
+                                  <span className="w-1.5 h-1.5 bg-slate-800 rounded-full" />
+                                )}
+                              </button>
+                            );
+                          })
+                        ) : (
+                          <div className="px-4 py-4 text-xs font-medium text-slate-400 text-center">
+                            Kota tidak ditemukan
+                          </div>
+                        )}
+                      </div>
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
+            </div>
           </motion.div>
         </header>
 
