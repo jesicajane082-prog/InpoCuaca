@@ -15,7 +15,14 @@ import {
   CloudRain,
   CloudLightning,
   CloudFog,
-  CloudDrizzle
+  CloudDrizzle,
+  MessageSquare,
+  Send,
+  Settings,
+  X,
+  Sparkles,
+  Brain,
+  Key
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -45,13 +52,13 @@ const getH2HRecord = (home, away, h2hDb) => {
   if (!h2hDb) return null;
   const normHome = normalizeTeamNameForH2H(home);
   const normAway = normalizeTeamNameForH2H(away);
-  
+
   const keys = [normHome, normAway].sort();
   const lookupKey = `${keys[0]}_vs_${keys[1]}`;
-  
+
   const record = h2hDb[lookupKey];
   if (!record) return null;
-  
+
   // Kembalikan rekor yang disesuaikan dengan posisi kandang/tandang saat ini
   if (keys[0] === normHome) {
     return {
@@ -110,7 +117,7 @@ const getCombinedProbabilities = (homeName, awayName, standingsData, h2hDb) => {
       const h2hHomeRatio = h2h.homeWins / totalMatches;
       const h2hAwayRatio = h2h.awayWins / totalMatches;
       const h2hDrawRatio = h2h.draws / totalMatches;
-      
+
       probHome = probHome * 0.5 + (h2hHomeRatio * 100) * 0.5;
       probAway = probAway * 0.5 + (h2hAwayRatio * 100) * 0.5;
       probDraw = probDraw * 0.5 + (h2hDrawRatio * 100) * 0.5;
@@ -141,12 +148,12 @@ const formatDateIndo = (dateStr) => {
   const date = new Date(dateStr);
   const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
   const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
-  
+
   const dayName = days[date.getDay()];
   const dayNum = date.getDate();
   const monthName = months[date.getMonth()];
   const year = date.getFullYear();
-  
+
   return `${dayName}, ${dayNum} ${monthName} ${year}`;
 };
 
@@ -226,6 +233,111 @@ export default function Dashboard() {
   // Real-time states
   const [currentTime, setCurrentTime] = useState(new Date());
   const [nextPrayer, setNextPrayer] = useState(null);
+  // AI Chat States
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState([
+    { role: 'assistant', content: 'Halo! Saya Asisten AI Portal Publik. Saya bisa membantu menjawab pertanyaan seputar cuaca hari ini, jadwal sholat, info gempa BMKG, atau klasemen Liga 1 Indonesia.' }
+  ]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const [hfToken, setHfToken] = useState(() => localStorage.getItem('hf_token') || '');
+  const [selectedModel, setSelectedModel] = useState('Qwen/Qwen2.5-72B-Instruct');
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  const handleSendMessage = async (customMessage = null) => {
+    const textToSend = customMessage || chatInput;
+    if (!textToSend.trim()) return;
+
+    if (!customMessage) {
+      setChatInput('');
+    }
+
+    // Add user message to history
+    const updatedMessages = [...chatMessages, { role: 'user', content: textToSend }];
+    setChatMessages(updatedMessages);
+    setChatLoading(true);
+
+    if (!hfToken.trim()) {
+      setTimeout(() => {
+        setChatMessages(prev => [
+          ...prev,
+          { role: 'assistant', content: 'Maaf, untuk mengaktifkan obrolan AI, silakan klik tombol roda gigi ⚙️ di kanan atas jendela chat ini dan masukkan Token Hugging Face Anda (gratis dibuat di huggingface.co).' }
+        ]);
+        setChatLoading(false);
+      }, 800);
+      return;
+    }
+
+    try {
+      // 1. Construct system prompt containing real-time dashboard data as context
+      const weatherContext = weather ? `Suhu: ${Math.round(weather.current.temperature_2m)}°C, kondisi: ${getWeatherDesc(weather.current.weather_code)}, Kelembaban: ${weather.current.relative_humidity_2m}%, Kecepatan Angin: ${weather.current.wind_speed_10m} km/j. Harian tertinggi: ${Math.round(weather.daily.temperature_2m_max[0])}°C, terendah: ${Math.round(weather.daily.temperature_2m_min[0])}°C.` : 'Data cuaca belum termuat.';
+      
+      const prayerContext = prayerSchedule ? `Jadwal sholat hari ini di ${selectedCity.label}: Imsak (${prayerSchedule.imsyak}), Subuh (${prayerSchedule.shubuh}), Terbit (${prayerSchedule.terbit}), Dhuha (${prayerSchedule.dhuha}), Dzuhur (${prayerSchedule.dzuhur}), Ashar (${prayerSchedule.ashr}), Maghrib (${prayerSchedule.magrib}), Isya (${prayerSchedule.isya}).` : 'Data jadwal sholat belum termuat.';
+      
+      const earthquakeContext = quake ? `Gempa bumi terkini kekuatan Magnitudo ${quake.Magnitude}, Kedalaman ${quake.Kedalaman}, terjadi di ${quake.Wilayah} pada ${quake.Tanggal} pukul ${quake.Jam}. Status/Potensi: ${quake.Potensi}.` : 'Data gempa belum termuat.';
+      
+      const standingsContext = standings && standings.length > 0 ? standings.map(t => `- Peringkat ${t.position || standings.indexOf(t)+1}: ${t.team_name} (${t.match_played} main, ${t.win} menang, ${t.draw} seri, ${t.lose} kalah, ${t.point} poin, Form: ${t.form})`).join('\n') : 'Data klasemen belum termuat.';
+      
+      const matchesContext = `Live score saat ini: ${liveMatches && liveMatches.length > 0 ? `${liveMatches[0].home_team} vs ${liveMatches[0].away_team} (${liveMatches[0].home_score}-${liveMatches[0].away_score})` : 'Tidak ada pertandingan aktif (LIVE).'}
+      Jadwal laga terdekat: ${upcomingMatches && upcomingMatches.length > 0 ? `${upcomingMatches[0].home_team} vs ${upcomingMatches[0].away_team} pada ${upcomingMatches[0].date}` : 'Tidak ada jadwal terdekat.'}
+      Hasil laga terakhir: ${pastResults && pastResults.length > 0 ? `${pastResults[0].home_team} vs ${pastResults[0].away_team} (${pastResults[0].home_score}-${pastResults[0].away_score})` : 'Tidak ada hasil pertandingan terbaru.'}`;
+
+      const systemPrompt = `Anda adalah Asisten AI cerdas berwatak ramah untuk Portal Informasi Publik ini. Anda bertugas membantu menjawab pertanyaan warga secara informatif, bersahabat, ringkas, dan jelas dalam Bahasa Indonesia.
+
+Berikut adalah DATA REAL-TIME yang bersumber langsung dari Dashboard saat ini:
+- WILAYAH AKTIF: ${selectedCity.label} (Jawa Timur, Indonesia)
+- WAKTU LOKAL SISTEM: ${new Date().toLocaleString('id-ID')}
+- KONDISI CUACA: ${weatherContext}
+- JADWAL SHOLAT: ${prayerContext}
+- INFO GEMPA TERKINI (BMKG): ${earthquakeContext}
+- KLASEMEN LIGA 1 INDONESIA (Top 5):
+${standingsContext}
+- JADWAL & HASIL LAGA:
+${matchesContext}
+
+INSTRUKSI PENTING:
+1. Jawablah menggunakan data real-time di atas jika pertanyaan pengguna berhubungan dengan cuaca, jadwal sholat, gempa terkini, atau Liga 1 Indonesia.
+2. Gunakan Bahasa Indonesia yang sopan, santun, dan bersahabat.
+3. Jaga jawaban tetap ringkas (maksimal 2-3 paragraf pendek) agar nyaman dibaca di layar HP/chat bubble.
+4. Jika pertanyaan di luar data dashboard, Anda tetap diperbolehkan menjawabnya menggunakan pengetahuan umum Anda sebagai AI umum.`;
+
+      // 2. Fetch from Hugging Face OpenAI-compatible Serverless Router
+      const response = await fetch(`https://api-inference.huggingface.co/models/${selectedModel}/v1/chat/completions`, {
+        headers: {
+          'Authorization': `Bearer ${hfToken}`,
+          'Content-Type': 'application/json'
+        },
+        method: 'POST',
+        body: JSON.stringify({
+          model: selectedModel,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            ...updatedMessages.slice(-6).map(m => ({ role: m.role, content: m.content })) // send last 6 messages context
+          ],
+          max_tokens: 450
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const replyContent = data.choices[0].message.content;
+
+      setChatMessages(prev => [...prev, { role: 'assistant', content: replyContent }]);
+    } catch (err) {
+      console.error(err);
+      setChatMessages(prev => [
+        ...prev,
+        { role: 'assistant', content: `Maaf, terjadi kesalahan saat menghubungi AI: ${err.message}. Pastikan Token Hugging Face Anda benar dan model sedang aktif.` }
+      ]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
 
   const selectedCity = CITIES.find(c => c.id === city) || CITIES[0];
 
@@ -349,8 +461,8 @@ export default function Dashboard() {
         try {
           // Gunakan dateEventLocal (sudah waktu lokal Indonesia)
           const d = new Date(dateStr + 'T00:00:00');
-          const days = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
-          const months = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+          const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+          const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
           return `${days[d.getDay()]}, ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
         } catch { return dateStr; }
       };
@@ -375,9 +487,9 @@ export default function Dashboard() {
               event.strStatus === 'Live' ||
               event.strStatus === 'Halftime' ||
               (event.intHomeScore !== null && event.intHomeScore !== '' &&
-               event.intAwayScore !== null && event.intAwayScore !== '' &&
-               event.strStatus !== 'Match Finished' &&
-               event.strStatus !== 'Match Postponed')
+                event.intAwayScore !== null && event.intAwayScore !== '' &&
+                event.strStatus !== 'Match Finished' &&
+                event.strStatus !== 'Match Postponed')
             )
             .map(event => ({
               id: event.idEvent,
@@ -590,26 +702,16 @@ export default function Dashboard() {
             animate={{ x: 0, opacity: 1 }}
             className="flex items-center gap-2"
           >
-            <div className="flex items-center gap-2">
-              <MapPin className="w-4 h-4 text-slate-300" />
-              <select
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-                className="bg-white border border-slate-200 px-3 py-2 rounded-lg text-sm outline-none hover:border-slate-300 transition-all cursor-pointer focus:ring-2 focus:ring-slate-100 font-medium"
-              >
-                {CITIES.map(c => (
-                  <option key={c.id} value={c.id}>{c.label}</option>
-                ))}
-              </select>
-            </div>
-            <button
-              onClick={() => fetchData(true)}
-              disabled={loading}
-              className="p-2 bg-white hover:bg-slate-50 active:bg-slate-100 border border-slate-200 rounded-lg text-slate-500 hover:text-slate-700 transition-all shadow-sm focus:ring-2 focus:ring-slate-100 flex items-center justify-center disabled:opacity-50"
-              title="Segarkan data"
+            <MapPin className="w-4 h-4 text-slate-300" />
+            <select
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              className="bg-white border border-slate-200 px-3 py-2 rounded-lg text-sm outline-none hover:border-slate-300 transition-all cursor-pointer focus:ring-2 focus:ring-slate-100 font-medium"
             >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-slate-400' : 'text-slate-400'}`} />
-            </button>
+              {CITIES.map(c => (
+                <option key={c.id} value={c.id}>{c.label}</option>
+              ))}
+            </select>
           </motion.div>
         </header>
 
@@ -631,9 +733,7 @@ export default function Dashboard() {
                 </div>
                 <div>
                   <p className="text-xs font-medium text-slate-400 mb-1 tracking-wide">Jangan lupa waktu solatnya ya</p>
-                  <h2 className="text-base sm:text-xl md:text-2xl font-semibold tracking-tight text-slate-800">
-                    Sholat {nextPrayer.name} <span className="text-slate-400 ml-1.5 font-normal text-xs sm:text-sm md:text-base">({nextPrayer.time})</span>
-                  </h2>
+                  <h2 className="text-lg md:text-2xl font-semibold tracking-tight text-slate-800">Sholat {nextPrayer.name} <span className="text-slate-500 ml-2 font-light">({nextPrayer.time})</span></h2>
                 </div>
               </div>
               <div className="bg-white text-slate-900 px-4 md:px-6 py-3 md:py-4 rounded-xl text-center min-w-[100px] md:min-w-[140px] z-10 shadow-sm border border-slate-200">
@@ -777,18 +877,164 @@ export default function Dashboard() {
               )}
             </motion.section>
 
+            {/* Sources & Status Card */}
+            <motion.section
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="bg-white border border-slate-200 rounded-2xl p-6"
+            >
+              <h3 className="text-xs font-bold text-slate-400 mb-5">Indikator data</h3>
+              <div className="space-y-4">
+                {[
+                  { label: 'Informasi gempa', src: 'BMKG' },
+                  { label: 'Jadwal keagamaan', src: 'JadwalSholat.org' },
+                  { label: 'Prediksi cuaca', src: 'Open-Meteo' },
+                  { label: 'Statistik liga', src: 'Liga Indo API' }
+                ].map((item, idx) => (
+                  <div key={idx} className="flex items-center justify-between group">
+                    <span className="text-xs font-medium text-slate-500 group-hover:text-slate-800 transition-colors">{item.label}</span>
+                    <span className="text-[10px] font-bold text-slate-400 tracking-wide uppercase">{item.src}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-8 pt-6 border-t border-slate-50">
+                <button
+                  onClick={() => fetchData(true)}
+                  className="w-full py-3 bg-slate-100 hover:bg-slate-200 border border-slate-200/50 text-slate-700 text-xs font-semibold rounded-xl transition-all flex items-center justify-center gap-2.5 shadow-sm group"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 text-slate-400 group-hover:rotate-180 transition-transform duration-500" />
+                  Segarkan informasi
+                </button>
+              </div>
+            </motion.section>
+          </div>
+        </div>
+
+        {/* Liga Indonesia - Only shown if data is available */}
+        <AnimatePresence>
+          {standings && standings.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-8 md:mt-16 space-y-6 md:space-y-8"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2 px-1 md:px-2">
+                <h2 className="text-base md:text-xl font-semibold text-slate-800 flex items-center gap-2 md:gap-3">
+                  <div className="w-10 h-10 bg-slate-50 rounded-full flex items-center justify-center flex-shrink-0">
+                    <Trophy className="w-5 h-5 text-slate-500" />
+                  </div>
+                  <span>Liga 1 Indonesia</span>
+                </h2>
+                <div className="flex items-center gap-2 text-xs font-medium text-slate-400">
+                  Musim 2025/2026
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                {/* Standings Table */}
+                <div className="lg:col-span-8">
+                  <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                    <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                      <span className="text-xs font-semibold text-slate-500">Klasemen sementara</span>
+                      <ArrowRight className="w-3 h-3 text-slate-300" />
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm min-w-[520px]">
+                        <thead>
+                          <tr className="text-xs font-bold text-slate-300 border-b border-slate-50">
+                            <th className="text-left px-3 md:px-6 py-4">Pos</th>
+                            <th className="text-left py-4">Nama Klub</th>
+                            <th className="text-center py-4 px-2">M</th>
+                            <th className="text-center py-4 px-2">W</th>
+                            <th className="text-center py-4 px-2">D</th>
+                            <th className="text-center py-4 px-2">L</th>
+                            <th className="text-center py-4 px-2">Form</th>
+                            <th className="text-right px-3 md:px-6 py-4">Poin</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50">
+                          {standings.map((team, i) => (
+                            <tr key={i} className={`hover:bg-slate-50/50 transition-all group border-l-4 ${i === 0 ? 'border-l-slate-300' : (i <= 2 ? 'border-l-slate-200' : 'border-l-transparent')
+                              }`}>
+                              <td className="px-3 md:px-6 py-3.5 text-slate-400 text-xs font-medium">{team.position || i + 1}</td>
+                              <td className="py-3.5">
+                                <div className="flex items-center gap-3">
+                                  {team.team_logo ? (
+                                    <img src={getLocalLogo(team.team_name, team.team_logo)} alt="" className="w-6 h-6 object-contain" referrerPolicy="no-referrer" />
+                                  ) : (
+                                    <div className="w-6 h-6 bg-slate-100 rounded-full" />
+                                  )}
+                                  <span className="text-slate-700 font-semibold truncate max-w-[120px] sm:max-w-[180px] md:max-w-none">{team.team_name}</span>
+                                </div>
+                              </td>
+                              <td className="text-center py-3.5 px-2 text-slate-500 font-medium">{team.match_played}</td>
+                              <td className="text-center py-3.5 px-2 text-slate-600 font-medium">{team.win}</td>
+                              <td className="text-center py-3.5 px-2 text-slate-400 font-medium">{team.draw}</td>
+                              <td className="text-center py-3.5 px-2 text-slate-400 font-medium">{team.lose}</td>
+                              <td className="text-center py-3.5 px-2">
+                                {team.form ? (
+                                  <div className="flex gap-0.5 justify-center">
+                                    {team.form.split('').slice(0, 5).map((f, fi) => (
+                                      <span key={fi} className={`w-4 h-4 rounded-full text-[7px] font-extrabold flex items-center justify-center ${f === 'W' ? 'bg-emerald-500 text-white' :
+                                          f === 'L' ? 'bg-rose-400 text-white' :
+                                            'bg-slate-200 text-slate-500'
+                                        }`}>{f}</span>
+                                    ))}
+                                  </div>
+                                ) : <span className="text-slate-200 text-xs">—</span>}
+                              </td>
+                              <td className="text-right px-3 md:px-6 py-3.5 font-bold text-slate-900 tabular-nums">{team.point}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Sidebar: Top Scorers & Upcoming Matches */}
+                <div className="lg:col-span-4 space-y-8">
+                  {/* Top Scorers Card */}
+                  <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                    <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+                      <span className="text-xs font-semibold text-slate-500">Top skor</span>
+                    </div>
+                    {topScorers ? (
+                      <div className="divide-y divide-slate-50">
+                        {topScorers.map((player, i) => (
+                          <div key={i} className="flex items-center justify-between px-6 py-4 hover:bg-slate-50/50 transition-colors">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <span className="text-xs font-bold text-slate-300 w-3">{i + 1}</span>
+                              {player.player_photo && <img src={player.player_photo} alt="" className="w-8 h-8 rounded-full object-cover border border-slate-100" />}
+                              <div className="min-w-0">
+                                <p className="text-sm font-semibold text-slate-800 truncate leading-none mb-1">{player.player_name}</p>
+                                <p className="text-[10px] font-medium text-slate-400 truncate tracking-wide">{player.team_name}</p>
+                              </div>
+                            </div>
+                            <div className="text-right pl-4">
+                              <span className="text-lg font-bold text-slate-900 tabular-nums">{player.goals}</span>
+                              <p className="text-[8px] font-bold text-slate-300 uppercase">Gol</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-10 text-center text-slate-300 text-xs font-light">Data pemain belum tersedia</div>
+                    )}
+                  </div>
+
                   {/* Upcoming Matches & AI Predictions Card */}
                   <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
                     <div className="px-4 md:px-6 py-3 md:py-4 border-b border-slate-100 bg-slate-50/50 flex flex-wrap items-center justify-between gap-2">
                       <span className="text-xs font-bold text-slate-700">Jadwal & Prediksi Laga</span>
                       <div className="flex bg-slate-100 p-0.5 rounded-lg w-full sm:w-auto">
-                        <button 
+                        <button
                           onClick={() => setActiveScheduleTab('upcoming')}
                           className={`px-2.5 py-1 text-[9px] font-bold rounded-md transition-all flex-1 sm:flex-none ${activeScheduleTab === 'upcoming' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                         >
                           Mendatang
                         </button>
-                        <button 
+                        <button
                           onClick={() => setActiveScheduleTab('results')}
                           className={`px-2.5 py-1 text-[9px] font-bold rounded-md transition-all flex-1 sm:flex-none ${activeScheduleTab === 'results' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                         >
@@ -906,173 +1152,209 @@ export default function Dashboard() {
                       )
                     )}
                   </div>
-
-
-          </div>
-        </div>
-
-        {/* Liga Indonesia - Only shown if data is available */}
-        <AnimatePresence>
-          {standings && standings.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mt-8 md:mt-16 space-y-6 md:space-y-8"
-            >
-              <div className="flex flex-wrap items-center justify-between gap-2 px-1 md:px-2">
-                <h2 className="text-base md:text-xl font-semibold text-slate-800 flex items-center gap-2 md:gap-3">
-                  <div className="w-10 h-10 bg-slate-50 rounded-full flex items-center justify-center flex-shrink-0">
-                    <Trophy className="w-5 h-5 text-slate-500" />
-                  </div>
-                  <span>Liga 1 Indonesia</span>
-                </h2>
-                <div className="flex items-center gap-2 text-xs font-medium text-slate-400">
-                  Musim 2025/2026
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                {/* Standings Table */}
-                <div className="lg:col-span-8">
-                    <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-                    <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                       <span className="text-xs font-semibold text-slate-500">Klasemen sementara</span>
-                       <ArrowRight className="w-3 h-3 text-slate-300" />
-                     </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm min-w-[520px]">
-                        <thead>
-                          <tr className="text-xs font-bold text-slate-300 border-b border-slate-50">
-                            <th className="text-left px-3 md:px-6 py-4">Pos</th>
-                            <th className="text-left py-4">Nama Klub</th>
-                            <th className="text-center py-4 px-2">M</th>
-                            <th className="text-center py-4 px-2">W</th>
-                            <th className="text-center py-4 px-2">D</th>
-                            <th className="text-center py-4 px-2">L</th>
-                            <th className="text-center py-4 px-2">Form</th>
-                            <th className="text-right px-3 md:px-6 py-4">Poin</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-50">
-                          {standings.map((team, i) => (
-                            <tr key={i} className={`hover:bg-slate-50/50 transition-all group border-l-4 ${
-                              i === 0 ? 'border-l-slate-300' : (i <= 2 ? 'border-l-slate-200' : 'border-l-transparent')
-                            }`}>
-                              <td className="px-3 md:px-6 py-3.5 text-slate-400 text-xs font-medium">{team.position || i + 1}</td>
-                              <td className="py-3.5">
-                                <div className="flex items-center gap-3">
-                                  {team.team_logo ? (
-                                    <img src={getLocalLogo(team.team_name, team.team_logo)} alt="" className="w-6 h-6 object-contain" referrerPolicy="no-referrer" />
-                                  ) : (
-                                    <div className="w-6 h-6 bg-slate-100 rounded-full" />
-                                  )}
-                                  <span className="text-slate-700 font-semibold truncate max-w-[120px] sm:max-w-[180px] md:max-w-none">{team.team_name}</span>
-                                </div>
-                              </td>
-                              <td className="text-center py-3.5 px-2 text-slate-500 font-medium">{team.match_played}</td>
-                              <td className="text-center py-3.5 px-2 text-slate-600 font-medium">{team.win}</td>
-                              <td className="text-center py-3.5 px-2 text-slate-400 font-medium">{team.draw}</td>
-                              <td className="text-center py-3.5 px-2 text-slate-400 font-medium">{team.lose}</td>
-                              <td className="text-center py-3.5 px-2">
-                                {team.form ? (
-                                  <div className="flex gap-0.5 justify-center">
-                                    {team.form.split('').slice(0,5).map((f, fi) => (
-                                      <span key={fi} className={`w-4 h-4 rounded-full text-[7px] font-extrabold flex items-center justify-center ${
-                                        f === 'W' ? 'bg-emerald-500 text-white' :
-                                        f === 'L' ? 'bg-rose-400 text-white' :
-                                        'bg-slate-200 text-slate-500'
-                                      }`}>{f}</span>
-                                    ))}
-                                  </div>
-                                ) : <span className="text-slate-200 text-xs">—</span>}
-                              </td>
-                              <td className="text-right px-3 md:px-6 py-3.5 font-bold text-slate-900 tabular-nums">{team.point}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Sidebar: Top Scorers & Upcoming Matches */}
-                <div className="lg:col-span-4 space-y-8">
-                  {/* Top Scorers Card */}
-                  <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-                    <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-                      <span className="text-xs font-semibold text-slate-500">Top skor</span>
-                    </div>
-                    {topScorers ? (
-                      <div className="divide-y divide-slate-50">
-                        {topScorers.map((player, i) => (
-                          <div key={i} className="flex items-center justify-between px-6 py-4 hover:bg-slate-50/50 transition-colors">
-                            <div className="flex items-center gap-3 min-w-0">
-                              <span className="text-xs font-bold text-slate-300 w-3">{i + 1}</span>
-                              {player.player_photo && <img src={player.player_photo} alt="" className="w-8 h-8 rounded-full object-cover border border-slate-100" />}
-                              <div className="min-w-0">
-                                <p className="text-sm font-semibold text-slate-800 truncate leading-none mb-1">{player.player_name}</p>
-                                <p className="text-[10px] font-medium text-slate-400 truncate tracking-wide">{player.team_name}</p>
-                              </div>
-                            </div>
-                            <div className="text-right pl-4">
-                              <span className="text-lg font-bold text-slate-900 tabular-nums">{player.goals}</span>
-                              <p className="text-[8px] font-bold text-slate-300 uppercase">Gol</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="p-10 text-center text-slate-300 text-xs font-light">Data pemain belum tersedia</div>
-                    )}
-                  </div>
-
-
                 </div>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Modern Rich Footer */}
-        <footer className="mt-32 md:mt-48 pt-10 pb-6 border-t border-slate-100 bg-slate-50/30 rounded-3xl px-6 md:px-10 text-slate-500">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10 text-left">
-            {/* Left brand block */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 bg-slate-800 text-white rounded-lg flex items-center justify-center font-bold text-xs shadow-sm">
-                  I
-                </div>
-                <h3 className="text-sm font-bold text-slate-800 tracking-wide uppercase">
-                  Portal Informasi Publik
-                </h3>
-              </div>
-              <p className="text-xs text-slate-400 leading-relaxed max-w-sm">
-                Platform modern terintegrasi untuk memantau cuaca lokal, jadwal sholat harian, info gempa terkini BMKG, serta statistik real-time Liga 1 Indonesia.
-              </p>
-            </div>
-
-            {/* Right sources / info block */}
-            <div className="flex flex-col md:items-end justify-between gap-4">
-              <div className="flex flex-wrap gap-2 md:justify-end">
-                <span className="px-2.5 py-1 bg-slate-100 text-slate-600 rounded-md text-[10px] font-semibold border border-slate-200/40">BMKG API</span>
-                <span className="px-2.5 py-1 bg-slate-100 text-slate-600 rounded-md text-[10px] font-semibold border border-slate-200/40">Open-Meteo</span>
-                <span className="px-2.5 py-1 bg-slate-100 text-slate-600 rounded-md text-[10px] font-semibold border border-slate-200/40">TheSportsDB</span>
-              </div>
-              <p className="text-[10px] text-slate-400 md:text-right">
-                Data diperbarui secara otomatis setiap beberapa menit dari API terpercaya.
-              </p>
-            </div>
-          </div>
-
-          <div className="pt-6 border-t border-slate-100/80 flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left">
-            <p className="text-[11px] font-medium text-slate-400">
-              &copy; {new Date().getFullYear()} Ikko. Hak Cipta Dilindungi.
-            </p>
-            <p className="text-[11px] font-semibold text-slate-500 flex items-center gap-1 group justify-center sm:justify-end">
-              Dikembangkan oleh <span className="text-slate-800 underline underline-offset-4 decoration-slate-200 group-hover:decoration-slate-400 transition-colors">Ikko</span>
-            </p>
+        {/* Minimalist Footer */}
+        <footer className="mt-24 pt-8 border-t border-slate-50 text-center">
+          <p className="text-slate-300 text-[10px] font-bold mb-4 tracking-widest">
+            Portal Informasi Publik — Ikko
+          </p>
+          <div className="flex items-center justify-center gap-6">
+            <span className="w-1 h-1 bg-slate-200 rounded-full" />
+            <span className="text-[9px] font-medium text-slate-400">Data sinkronisasi otomatis dari sumber terpercaya</span>
+            <span className="w-1 h-1 bg-slate-200 rounded-full" />
           </div>
         </footer>
+        {/* Floating Chat Button */}
+        <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
+          <AnimatePresence>
+            {!isChatOpen && (
+              <motion.button
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0, opacity: 0 }}
+                onClick={() => setIsChatOpen(true)}
+                className="w-14 h-14 bg-slate-900 text-white rounded-full flex items-center justify-center shadow-lg hover:shadow-xl active:scale-95 transition-all hover:bg-slate-800 relative group"
+              >
+                <MessageSquare className="w-6 h-6 text-white" />
+                <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white animate-ping" />
+                <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white" />
+                
+                {/* Floating pill badge */}
+                <div className="absolute right-16 bg-white border border-slate-200 text-slate-700 text-xs font-semibold px-3 py-1.5 rounded-xl shadow-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
+                  Tanya Asisten AI ✨
+                </div>
+              </motion.button>
+            )}
+          </AnimatePresence>
+
+          <AnimatePresence>
+            {isChatOpen && (
+              <motion.div
+                initial={{ y: 80, opacity: 0, scale: 0.95 }}
+                animate={{ y: 0, opacity: 1, scale: 1 }}
+                exit={{ y: 80, opacity: 0, scale: 0.95 }}
+                className="w-[90vw] sm:w-[420px] h-[600px] max-h-[80vh] bg-white border border-slate-200 rounded-3xl shadow-2xl flex flex-col overflow-hidden"
+              >
+                {/* Header */}
+                <div className="bg-slate-50 border-b border-slate-100 px-6 py-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-slate-900 text-white rounded-xl flex items-center justify-center">
+                      <Sparkles className="w-4 h-4 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5 text-left">
+                        Asisten AI Publik
+                      </h3>
+                      <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider text-left">
+                        {selectedModel.split('/').pop()}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+                      className={`p-2 rounded-lg transition-all ${isSettingsOpen ? 'bg-slate-200 text-slate-700' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'}`}
+                      title="Pengaturan AI"
+                    >
+                      <Settings className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setIsChatOpen(false)}
+                      className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Settings Overlay / Panel */}
+                <AnimatePresence>
+                  {isSettingsOpen && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="border-b border-slate-100 bg-slate-50/50 overflow-hidden"
+                    >
+                      <div className="p-5 space-y-4 text-left">
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide flex items-center gap-1.5">
+                            <Key className="w-3 h-3 text-slate-400" />
+                            Hugging Face Token
+                          </label>
+                          <input
+                            type="password"
+                            placeholder="hf_..."
+                            value={hfToken}
+                            onChange={(e) => {
+                              const t = e.target.value;
+                              setHfToken(t);
+                              localStorage.setItem('hf_token', t);
+                            }}
+                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs outline-none hover:border-slate-300 focus:ring-2 focus:ring-slate-100 font-medium"
+                          />
+                          <p className="text-[9px] text-slate-400">
+                            Masukkan token gratis Anda. Dapatkan di <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener noreferrer" className="text-slate-900 underline font-semibold">Hugging Face Settings</a>.
+                          </p>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide flex items-center gap-1.5">
+                            <Brain className="w-3 h-3 text-slate-400" />
+                            Pilih Model AI
+                          </label>
+                          <select
+                            value={selectedModel}
+                            onChange={(e) => setSelectedModel(e.target.value)}
+                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs outline-none hover:border-slate-300 focus:ring-2 focus:ring-slate-100 font-medium"
+                          >
+                            <option value="Qwen/Qwen2.5-72B-Instruct">Qwen 2.5 72B (Cepat & Cerdas)</option>
+                            <option value="deepseek-ai/DeepSeek-R1-Distill-Qwen-32B">DeepSeek R1 32B (Reasoning/Penalaran)</option>
+                            <option value="google/gemma-3-27b-it">Google Gemma 3 27B (Terbaru)</option>
+                            <option value="meta-llama/Llama-3.3-70B-Instruct">Llama 3.3 70B (Meta AI)</option>
+                          </select>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Chat Message Box */}
+                <div className="flex-1 p-5 overflow-y-auto space-y-4 flex flex-col scroll-smooth">
+                  {chatMessages.map((msg, idx) => (
+                    <div
+                      key={idx}
+                      className={`flex flex-col max-w-[85%] ${msg.role === 'user' ? 'ml-auto items-end' : 'items-start'}`}
+                    >
+                      <div
+                        className={`px-4 py-3 rounded-2xl text-xs sm:text-sm font-medium leading-relaxed text-left whitespace-pre-wrap ${
+                          msg.role === 'user'
+                            ? 'bg-slate-950 text-white rounded-tr-none'
+                            : 'bg-slate-100 text-slate-800 rounded-tl-none border border-slate-200/40'
+                        }`}
+                      >
+                        {msg.content}
+                      </div>
+                    </div>
+                  ))}
+
+                  {chatLoading && (
+                    <div className="flex items-center gap-1 bg-slate-50 border border-slate-100 px-4 py-3 rounded-2xl rounded-tl-none max-w-[80px]">
+                      <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" />
+                      <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:0.2s]" />
+                      <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:0.4s]" />
+                    </div>
+                  )}
+                </div>
+
+                {/* Quick Prompts Pills */}
+                <div className="px-5 py-2 flex flex-wrap gap-2 border-t border-slate-50 bg-slate-50/20">
+                  {[
+                    { label: '🌤️ Hujan hari ini?', q: 'Apakah hari ini akan turun hujan?' },
+                    { label: '🕋 Waktu Sholat?', q: 'Kapan jadwal sholat berikutnya hari ini?' },
+                    { label: '🏆 Klasemen Liga 1', q: 'Bagaimana peringkat klasemen Liga 1 saat ini?' }
+                  ].map((p, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => handleSendMessage(p.q)}
+                      disabled={chatLoading}
+                      className="px-2.5 py-1 bg-white border border-slate-200 rounded-full text-[10px] font-bold text-slate-500 hover:text-slate-800 hover:border-slate-300 transition-all active:scale-95 disabled:opacity-50"
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Input Area */}
+                <div className="border-t border-slate-100 p-4 bg-white flex items-center gap-2">
+                  <input
+                    type="text"
+                    placeholder={hfToken ? "Tanya asisten AI..." : "Masukkan token Hugging Face di Pengaturan..."}
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+                    disabled={chatLoading}
+                    className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm outline-none hover:border-slate-300 transition-colors focus:bg-white focus:ring-2 focus:ring-slate-100 font-medium"
+                  />
+                  <button
+                    onClick={() => handleSendMessage()}
+                    disabled={chatLoading || !chatInput.trim()}
+                    className="p-2.5 bg-slate-950 hover:bg-slate-850 text-white rounded-xl active:scale-95 transition-all flex items-center justify-center disabled:opacity-30 disabled:scale-100"
+                  >
+                    <Send className="w-4 h-4" />
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
 
       </div>
     </div>
