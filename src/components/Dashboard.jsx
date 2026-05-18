@@ -302,7 +302,7 @@ INSTRUKSI PENTING:
 4. Jika pertanyaan di luar data dashboard, Anda tetap diperbolehkan menjawabnya menggunakan pengetahuan umum Anda sebagai AI umum.`;
 
       // 2. Fetch from Hugging Face OpenAI-compatible Serverless Router
-      const response = await fetch(`https://api-inference.huggingface.co/models/${selectedModel}/v1/chat/completions`, {
+      const response = await fetch('https://router.huggingface.co/v1/chat/completions', {
         headers: {
           'Authorization': `Bearer ${hfToken}`,
           'Content-Type': 'application/json'
