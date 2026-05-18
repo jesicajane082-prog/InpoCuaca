@@ -825,73 +825,58 @@ INSTRUKSI PENTING:
     'TLKM': 3200
   });
 
-  // Real-time price feed loop from public, CORS-enabled Exchange Rate API
+  // Real-time price feed loop from TradingView's Global Scanner API
   useEffect(() => {
     const fetchRates = async () => {
       try {
-        const res = await fetch('https://open.er-api.com/v6/latest/USD');
+        const postData = {
+          "symbols": {"tickers": [
+            'FX:EURUSD', 'FX:GBPUSD', 'FX:USDJPY', 
+            'OANDA:XAUUSD', 
+            'NASDAQ:AAPL', 'NASDAQ:TSLA', 
+            'IDX:BBRI', 'IDX:TLKM'
+          ]},
+          "columns": ["close"]
+        };
+
+        const res = await fetch('https://scanner.tradingview.com/global/scan', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(postData)
+        });
+
         if (res.ok) {
           const data = await res.json();
-          if (data && data.rates) {
+          if (data && data.data) {
             setLivePrices(prev => {
-              const nextPrices = {
-                ...prev,
-                'EURUSD': parseFloat((1 / (data.rates.EUR || 0.86)).toFixed(5)),
-                'GBPUSD': parseFloat((1 / (data.rates.GBP || 0.75)).toFixed(5)),
-                'USDJPY': parseFloat((data.rates.JPY || 158.7).toFixed(2)),
-                'XAUUSD': parseFloat((1 / (data.rates.XAU || 0.00041)).toFixed(2)),
-                'AAPL': parseFloat((182.30 + (Math.random() - 0.5) * 1.5).toFixed(2)),
-                'TSLA': parseFloat((174.60 + (Math.random() - 0.5) * 2.5).toFixed(2)),
-                'BBRI': Math.round(4680 + (Math.random() - 0.5) * 60),
-                'TLKM': Math.round(3200 + (Math.random() - 0.5) * 40)
-              };
-
-              setBotLogs(prevLogs => {
-                const nextLogs = { ...prevLogs };
-                Object.keys(nextLogs).forEach(sym => {
-                  nextLogs[sym] = nextLogs[sym].map(log => {
-                    if (log.status === 'active') {
-                      const basePrice = nextPrices[sym];
-                      const decs = sym.includes('JPY') ? 2 : sym.includes('BBRI') || sym.includes('TLKM') ? 0 : 5;
-                      const entryStr = basePrice.toFixed(decs);
-                      
-                      const isBuy = log.type === 'BUY';
-                      const distMap = {
-                        'EURUSD': 0.00150, 'GBPUSD': 0.00200, 'USDJPY': 0.25, 'XAUUSD': 8.00,
-                        'AAPL': 2.00, 'TSLA': 3.50, 'BBRI': 50, 'TLKM': 30
-                      };
-                      const slDist = distMap[sym] || 0.01;
-                      
-                      const rrrParts = log.rrr.split(':').map(Number);
-                      const riskMultiplier = rrrParts[1] || 2.0;
-                      
-                      const slNum = isBuy ? (basePrice - slDist) : (basePrice + slDist);
-                      const tpNum = isBuy ? (basePrice + slDist * riskMultiplier) : (basePrice - slDist * riskMultiplier);
-                      
-                      return {
-                        ...log,
-                        entry: entryStr,
-                        sl: slNum.toFixed(decs),
-                        tp: tpNum.toFixed(decs)
-                      };
-                    }
-                    return log;
-                  });
-                });
-                return nextLogs;
+              const nextPrices = { ...prev };
+              data.data.forEach(item => {
+                const tvSymbol = item.s;
+                const price = item.d[0];
+                
+                if (tvSymbol === 'FX:EURUSD') nextPrices['EURUSD'] = price;
+                else if (tvSymbol === 'FX:GBPUSD') nextPrices['GBPUSD'] = price;
+                else if (tvSymbol === 'FX:USDJPY') nextPrices['USDJPY'] = price;
+                else if (tvSymbol === 'OANDA:XAUUSD') nextPrices['XAUUSD'] = price;
+                else if (tvSymbol === 'NASDAQ:AAPL') nextPrices['AAPL'] = price;
+                else if (tvSymbol === 'NASDAQ:TSLA') nextPrices['TSLA'] = price;
+                else if (tvSymbol === 'IDX:BBRI') nextPrices['BBRI'] = Math.round(price);
+                else if (tvSymbol === 'IDX:TLKM') nextPrices['TLKM'] = Math.round(price);
               });
-
               return nextPrices;
             });
+            // We NO LONGER mutate active trade entries here! Once a trade is open, its entry is permanent.
           }
         }
       } catch (e) {
-        console.warn('Failed to fetch real-time exchange rates', e);
+        console.warn('Failed to fetch real-time TradingView rates', e);
       }
     };
     
     fetchRates();
-    const interval = setInterval(fetchRates, 30000);
+    const interval = setInterval(fetchRates, 10000); // Fetch from TradingView every 10 seconds
     return () => clearInterval(interval);
   }, []);
 
@@ -999,7 +984,11 @@ INSTRUKSI PENTING:
         const nextPrices = { ...prev };
         
         symbols.forEach(sym => {
-          const basePrice = prev[sym] || (sym === 'EURUSD' ? 1.16 : sym === 'USDJPY' ? 158.0 : 3200);
+          const defaultPrices = {
+            'EURUSD': 1.08450, 'GBPUSD': 1.25410, 'USDJPY': 155.60, 'XAUUSD': 2412.50,
+            'AAPL': 182.30, 'TSLA': 174.60, 'BBRI': 4680, 'TLKM': 3200
+          };
+          const basePrice = prev[sym] || defaultPrices[sym];
           const isFX = sym === 'EURUSD' || sym === 'GBPUSD';
           const isIndo = sym === 'BBRI' || sym === 'TLKM';
           const isGold = sym === 'XAUUSD';
