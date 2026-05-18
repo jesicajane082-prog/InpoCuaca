@@ -868,30 +868,30 @@ INSTRUKSI PENTING:
 
   const [botLogs, setBotLogs] = useState({
     'EURUSD': [
-      { id: 1, type: 'SELL', entry: '1.08450', rrr: '1:2.3', pnl: 'PROFIT (+0.56%)', status: 'closed', time: '10 menit yang lalu' },
-      { id: 2, type: 'BUY', entry: '1.08210', rrr: '1:2.0', pnl: 'LOSS (-0.31%)', status: 'closed', time: '2 jam yang lalu' }
+      { id: 1, type: 'SELL', entry: '1.08450', rrr: '1:2.3', sl: '1.08600', tp: '1.08105', timeframe: 'M15', pnl: 'PROFIT (+0.56%)', status: 'closed', time: '10 menit yang lalu' },
+      { id: 2, type: 'BUY', entry: '1.08210', rrr: '1:2.0', sl: '1.08060', tp: '1.08510', timeframe: 'M15', pnl: 'LOSS (-0.31%)', status: 'closed', time: '2 jam yang lalu' }
     ],
     'GBPUSD': [
-      { id: 1, type: 'BUY', entry: '1.25410', rrr: '1:2.5', pnl: 'PROFIT (+0.82%)', status: 'closed', time: '45 menit yang lalu' }
+      { id: 1, type: 'BUY', entry: '1.25410', rrr: '1:2.5', sl: '1.25210', tp: '1.25910', timeframe: 'M30', pnl: 'PROFIT (+0.82%)', status: 'closed', time: '45 menit yang lalu' }
     ],
     'USDJPY': [
-      { id: 1, type: 'BUY', entry: '155.60', rrr: '1:2.1', pnl: 'RUNNING (+0.44%)', status: 'active', time: 'Aktif' }
+      { id: 1, type: 'BUY', entry: '155.60', rrr: '1:2.1', sl: '155.35', tp: '156.12', timeframe: 'H1', pnl: 'RUNNING (+0.44%)', status: 'active', time: 'Aktif' }
     ],
     'XAUUSD': [
-      { id: 1, type: 'BUY', entry: '2412.50', rrr: '1:2.7', pnl: 'PROFIT (+1.24%)', status: 'closed', time: '5 menit yang lalu' },
-      { id: 2, type: 'SELL', entry: '2430.10', rrr: '1:2.4', pnl: 'RUNNING (+0.18%)', status: 'active', time: 'Aktif' }
+      { id: 1, type: 'BUY', entry: '2412.50', rrr: '1:2.7', sl: '2404.50', tp: '2434.10', timeframe: 'H4', pnl: 'PROFIT (+1.24%)', status: 'closed', time: '5 menit yang lalu' },
+      { id: 2, type: 'SELL', entry: '2430.10', rrr: '1:2.4', sl: '2438.10', tp: '2418.66', timeframe: 'H4', pnl: 'RUNNING (+0.18%)', status: 'active', time: 'Aktif' }
     ],
     'AAPL': [
-      { id: 1, type: 'BUY', entry: '182.30', rrr: '1:2.2', pnl: 'PROFIT (+1.95%)', status: 'closed', time: '1 hari yang lalu' }
+      { id: 1, type: 'BUY', entry: '182.30', rrr: '1:2.2', sl: '180.30', tp: '186.70', timeframe: 'D1', pnl: 'PROFIT (+1.95%)', status: 'closed', time: '1 hari yang lalu' }
     ],
     'TSLA': [
-      { id: 1, type: 'BUY', entry: '174.60', rrr: '1:2.6', pnl: 'LOSS (-0.85%)', status: 'closed', time: '5 jam yang lalu' }
+      { id: 1, type: 'BUY', entry: '174.60', rrr: '1:2.6', sl: '171.10', tp: '183.70', timeframe: 'H1', pnl: 'LOSS (-0.85%)', status: 'closed', time: '5 jam yang lalu' }
     ],
     'BBRI': [
-      { id: 1, type: 'BUY', entry: '4680', rrr: '1:2.5', pnl: 'PROFIT (+3.20%)', status: 'closed', time: '3 jam yang lalu' }
+      { id: 1, type: 'BUY', entry: '4680', rrr: '1:2.5', sl: '4630', tp: '4755', timeframe: 'D1', pnl: 'PROFIT (+3.20%)', status: 'closed', time: '3 jam yang lalu' }
     ],
     'TLKM': [
-      { id: 1, type: 'BUY', entry: '3200', rrr: '1:2.1', pnl: 'RUNNING (+0.75%)', status: 'active', time: 'Aktif' }
+      { id: 1, type: 'BUY', entry: '3200', rrr: '1:2.1', sl: '3170', tp: '3263', timeframe: 'D1', pnl: 'RUNNING (+0.75%)', status: 'active', time: 'Aktif' }
     ]
   });
 
@@ -1033,13 +1033,43 @@ INSTRUKSI PENTING:
         else if (symbolLogs.filter(log => log.status === 'active').length === 0) {
           const basePrice = livePrices[randomSymbol] || 1.08;
           const delta = basePrice * (Math.random() - 0.5) * 0.0003;
-          const newEntry = (basePrice + delta).toFixed(randomSymbol.includes('JPY') ? 2 : randomSymbol.includes('BBRI') || randomSymbol.includes('TLKM') ? 0 : 5);
+          const newEntryNum = basePrice + delta;
+          
+          const tfMap = {
+            'EURUSD': 'M15', 'GBPUSD': 'M30', 'USDJPY': 'H1', 'XAUUSD': 'H4',
+            'AAPL': 'D1', 'TSLA': 'H1', 'BBRI': 'D1', 'TLKM': 'D1'
+          };
+          const tf = tfMap[randomSymbol] || 'H1';
+          
+          const distMap = {
+            'EURUSD': 0.00150, 'GBPUSD': 0.00200, 'USDJPY': 0.25, 'XAUUSD': 8.00,
+            'AAPL': 2.00, 'TSLA': 3.50, 'BBRI': 50, 'TLKM': 30
+          };
+          const slDist = distMap[randomSymbol] || 0.01;
+          
+          const isBuy = Math.random() > 0.5;
+          const typeStr = isBuy ? 'BUY' : 'SELL';
+          
+          const rrrValStr = performanceData[randomSymbol]?.avgRrr || '1:2.0';
+          const rrrParts = rrrValStr.split(':').map(Number);
+          const riskMultiplier = rrrParts[1] || 2.0;
+          
+          const slNum = isBuy ? (newEntryNum - slDist) : (newEntryNum + slDist);
+          const tpNum = isBuy ? (newEntryNum + slDist * riskMultiplier) : (newEntryNum - slDist * riskMultiplier);
+          
+          const decs = randomSymbol.includes('JPY') ? 2 : randomSymbol.includes('BBRI') || randomSymbol.includes('TLKM') ? 0 : 5;
+          const newEntry = newEntryNum.toFixed(decs);
+          const slPrice = slNum.toFixed(decs);
+          const tpPrice = tpNum.toFixed(decs);
           
           const newTrade = {
             id: Date.now(),
-            type: Math.random() > 0.5 ? 'BUY' : 'SELL',
+            type: typeStr,
             entry: newEntry,
-            rrr: performanceData[randomSymbol]?.avgRrr || '1:2.0',
+            sl: slPrice,
+            tp: tpPrice,
+            timeframe: tf,
+            rrr: rrrValStr,
             pnl: 'RUNNING (+0.00%)',
             status: 'active',
             time: 'Aktif'
@@ -1806,15 +1836,31 @@ INSTRUKSI PENTING:
                           <tr key={log.id} className="border-b border-slate-50/60 hover:bg-slate-50/30 transition-colors font-semibold">
                             <td className="px-6 py-4 text-slate-400 font-medium">{log.time}</td>
                             <td className="px-4 py-4">
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                log.type === 'BUY' 
-                                  ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' 
-                                  : 'bg-rose-50 text-rose-600 border border-rose-100'
-                              }`}>
-                                {log.type}
-                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                  log.type === 'BUY' 
+                                    ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' 
+                                    : 'bg-rose-50 text-rose-600 border border-rose-100'
+                                }`}>
+                                  {log.type}
+                                </span>
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-slate-100 text-slate-500 border border-slate-200/50">
+                                  {log.timeframe || 'M15'}
+                                </span>
+                              </div>
                             </td>
-                            <td className="px-4 py-4 text-slate-800">{log.entry}</td>
+                            <td className="px-4 py-4 text-left">
+                              <div className="space-y-0.5">
+                                <p className="text-slate-800 font-bold">{log.entry}</p>
+                                {log.sl && log.tp && (
+                                  <p className="text-[9px] text-slate-400 font-semibold tracking-wider">
+                                    <span className="text-rose-500">SL: {log.sl}</span>
+                                    <span className="mx-1 text-slate-300">|</span>
+                                    <span className="text-emerald-600">TP: {log.tp}</span>
+                                  </p>
+                                )}
+                              </div>
+                            </td>
                             <td className="px-4 py-4 text-slate-500 font-mono">{log.rrr}</td>
                             <td className="px-4 py-4 text-right pr-6 font-mono">
                               <span className={`${
