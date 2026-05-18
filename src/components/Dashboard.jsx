@@ -813,21 +813,6 @@ INSTRUKSI PENTING:
     return <CloudLightning className="w-12 h-12 text-indigo-500 animate-bounce" />;
   };
 
-  if (loading && !prayerSchedule && !weather) {
-    return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="flex flex-col items-center gap-3"
-        >
-          <div className="w-8 h-8 border-2 border-slate-100 border-t-slate-400 rounded-full animate-spin" />
-          <p className="text-slate-300 text-sm font-light">Sinkronisasi data publik...</p>
-        </motion.div>
-      </div>
-    );
-  }
-
   const SYMBOL_MAP = {
     'EURUSD': 'FX:EURUSD',
     'GBPUSD': 'FX:GBPUSD',
@@ -1032,6 +1017,23 @@ INSTRUKSI PENTING:
     
     return () => clearInterval(interval);
   }, [performanceData]);
+
+  if (loading && !prayerSchedule && !weather) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="flex flex-col items-center gap-3"
+        >
+          <div className="w-8 h-8 border-2 border-slate-100 border-t-slate-400 rounded-full animate-spin" />
+          <p className="text-slate-300 text-sm font-light">Sinkronisasi data publik...</p>
+        </motion.div>
+      </div>
+    );
+  }
+
+
 
   return (
     <div className="min-h-screen bg-white text-slate-700 pb-16 selection:bg-slate-100 selection:text-slate-900">
