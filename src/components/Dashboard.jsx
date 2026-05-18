@@ -868,6 +868,89 @@ INSTRUKSI PENTING:
     ]
   };
 
+  const MOCK_PERFORMANCE_DATA = {
+    'EURUSD': {
+      strategyName: 'Smart Money Concepts (SMC) & Liquidity Sweeps',
+      winRate: '68.2%',
+      avgRrr: '1:2.3',
+      profit1D: '+1.24%',
+      profit1W: '+5.82%',
+      profit1M: '+22.40%',
+      totalTrades: '34 Trades',
+      analysisExplain: 'Menggunakan pemetaan struktur pasar CHoCH (Change of Character) di timeframe M15. Bot mengeksekusi SELL di 1.08450 setelah mendeteksi Liquidity Sweep di atas harga tertinggi sesi London (London High) dengan probabilitas keberhasilan teknik mencapai 68.2% didukung RSI Divergence.'
+    },
+    'GBPUSD': {
+      strategyName: 'Order Block & Fair Value Gap (FVG) Refinement',
+      winRate: '65.5%',
+      avgRrr: '1:2.5',
+      profit1D: '+0.82%',
+      profit1W: '+4.90%',
+      profit1M: '+18.15%',
+      totalTrades: '28 Trades',
+      analysisExplain: 'Strategi difokuskan pada entry di area FVG H1 pasca-rilis kalender ekonomi AS. Probabilitas keberhasilan teknik mencapai 65.5% dengan perlindungan Stop Loss ketat di bawah batas kritis Support H1.'
+    },
+    'USDJPY': {
+      strategyName: 'Mean Reversion & Bollinger Band Extremes',
+      winRate: '71.0%',
+      avgRrr: '1:2.1',
+      profit1D: '+0.44%',
+      profit1W: '+3.75%',
+      profit1M: '+15.80%',
+      totalTrades: '42 Trades',
+      analysisExplain: 'Strategi pembalikan arah (Mean Reversion) memanfaatkan deviasi ekstrim 2.5 standard deviation pada Bollinger Bands H1. Memanfaatkan pelemahan momentum pembeli Yen Jepang.'
+    },
+    'XAUUSD': {
+      strategyName: 'Volume Profile & H4 Breakout Confirmation',
+      winRate: '72.5%',
+      avgRrr: '1:2.7',
+      profit1D: '+2.15%',
+      profit1W: '+9.40%',
+      profit1M: '+31.60%',
+      totalTrades: '38 Trades',
+      analysisExplain: 'Analisis berbasis Volume Profile pada area High Volume Node (HVN) emas. Posisi BUY di 2412.50 diambil setelah terjadi breakout dikonfirmasi volume transaksi institusional yang masif.'
+    },
+    'AAPL': {
+      strategyName: 'Gap Fill & Trend Following (EMA 20/50)',
+      winRate: '66.8%',
+      avgRrr: '1:2.2',
+      profit1D: '+1.95%',
+      profit1W: '+5.10%',
+      profit1M: '+12.40%',
+      totalTrades: '16 Trades',
+      analysisExplain: 'Strategi mengikuti tren utama menggunakan persilangan EMA 20 dan 50 pada chart harian. Mengambil momentum rilis produk baru Apple dengan stop loss di bawah swing low kemarin.'
+    },
+    'TSLA': {
+      strategyName: 'Volatility Breakout & ADX Momentum',
+      winRate: '60.4%',
+      avgRrr: '1:2.6',
+      profit1D: '-0.85%',
+      profit1W: '+2.90%',
+      profit1M: '+14.20%',
+      totalTrades: '22 Trades',
+      analysisExplain: 'Strategi breakout volatilitas tinggi dengan filter momentum indikator ADX > 25. Karena sifat saham Tesla yang sangat volatil, stop loss ditempatkan 1.5 ATR (Average True Range) dari entry.'
+    },
+    'BBRI': {
+      strategyName: 'Foreign Flow Accumulation & Fibonacci Retracement',
+      winRate: '70.2%',
+      avgRrr: '1:2.5',
+      profit1D: '+3.20%',
+      profit1W: '+7.80%',
+      profit1M: '+19.60%',
+      totalTrades: '14 Trades',
+      analysisExplain: 'Analisis berbasis data akumulasi aliran modal asing (Foreign Flow) dikombinasikan dengan level Fibonacci Retracement 61.8%. Bot masuk posisi BUY setelah harga memantul di area support Rp4.650.'
+    },
+    'TLKM': {
+      strategyName: 'Dividend Yield Accumulation & Support Bounce',
+      winRate: '69.0%',
+      avgRrr: '1:2.1',
+      profit1D: '+0.75%',
+      profit1W: '+3.40%',
+      profit1M: '+10.80%',
+      totalTrades: '12 Trades',
+      analysisExplain: 'Bot memanfaatkan area jenuh jual (Oversold) pada RSI harian di dekat area Support psikologis kuat Rp3.200, mengantisipasi pemantulan teknikal jangka menengah.'
+    }
+  };
+
   return (
     <div className="min-h-screen bg-white text-slate-700 pb-16 selection:bg-slate-100 selection:text-slate-900">
       
@@ -1623,6 +1706,81 @@ INSTRUKSI PENTING:
                         ))}
                       </tbody>
                     </table>
+                  </div>
+                </div>
+
+                {/* Laporan Performa & Backtesting AI */}
+                <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm p-6 space-y-6 text-left">
+                  {/* Header */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-trending-up"><path d="m22 7-8.5 8.5-5-5L2 17"/><path d="M16 7h6v6"/></svg>
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-bold text-slate-800">📊 Laporan Performa & Backtesting AI</h3>
+                        <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">
+                          Strategi: {MOCK_PERFORMANCE_DATA[selectedSymbol]?.strategyName || 'Kuantitatif'}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-3 py-1.5 rounded-lg">
+                      🎯 WIN RATE TEKNIK: {MOCK_PERFORMANCE_DATA[selectedSymbol]?.winRate || '68%'}
+                    </span>
+                  </div>
+
+                  {/* Performance Grid Cards (1 Day, 1 Week, 1 Month) */}
+                  <div className="grid grid-cols-3 gap-4">
+                    
+                    {/* 1 Day Return */}
+                    <div className="bg-slate-50/50 border border-slate-100 p-4 rounded-2xl text-center space-y-1 hover:bg-slate-50 transition-colors">
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">1 Hari (Today)</p>
+                      <p className={`text-lg font-bold ${
+                        (MOCK_PERFORMANCE_DATA[selectedSymbol]?.profit1D || '').includes('-') 
+                          ? 'text-rose-500' 
+                          : 'text-emerald-600'
+                      }`}>
+                        {MOCK_PERFORMANCE_DATA[selectedSymbol]?.profit1D || '+0.00%'}
+                      </p>
+                      <p className="text-[9px] text-slate-400 font-medium font-semibold">Sesi Aktif</p>
+                    </div>
+
+                    {/* 1 Week Return */}
+                    <div className="bg-slate-50/50 border border-slate-100 p-4 rounded-2xl text-center space-y-1 hover:bg-slate-50 transition-colors">
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">1 Minggu (1W)</p>
+                      <p className="text-lg font-bold text-emerald-600">
+                        {MOCK_PERFORMANCE_DATA[selectedSymbol]?.profit1W || '+0.00%'}
+                      </p>
+                      <p className="text-[9px] text-slate-400 font-medium font-semibold">Komulatif 7 Hari</p>
+                    </div>
+
+                    {/* 1 Month Return */}
+                    <div className="bg-slate-50/50 border border-slate-100 p-4 rounded-2xl text-center space-y-1 hover:bg-slate-50 transition-colors">
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">1 Bulan (1M)</p>
+                      <p className="text-lg font-bold text-emerald-600">
+                        {MOCK_PERFORMANCE_DATA[selectedSymbol]?.profit1M || '+0.00%'}
+                      </p>
+                      <p className="text-[9px] text-slate-400 font-medium font-semibold">Pengembalian 30 Hari</p>
+                    </div>
+
+                  </div>
+
+                  {/* Detailed AI Technique Backtesting Analysis */}
+                  <div className="bg-slate-50 border border-slate-100/60 rounded-2xl p-4.5 space-y-2">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                      <Brain className="w-3.5 h-3.5 text-slate-400 animate-pulse" />
+                      Ulasan Entry & Analisa Backtesting Bot
+                    </span>
+                    <p className="text-xs text-slate-600 leading-relaxed font-semibold select-text">
+                      {MOCK_PERFORMANCE_DATA[selectedSymbol]?.analysisExplain || 'Mengkalkulasi performa teknik...'}
+                    </p>
+                  </div>
+
+                  {/* Extra Stats Bar */}
+                  <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold px-2 pt-2 border-t border-slate-100 bg-white">
+                    <span>📈 Rata-rata Risk/Reward: <span className="text-slate-700">{MOCK_PERFORMANCE_DATA[selectedSymbol]?.avgRrr}</span></span>
+                    <span>📊 Total Sampel Sinyal: <span className="text-slate-700">{MOCK_PERFORMANCE_DATA[selectedSymbol]?.totalTrades}</span></span>
                   </div>
                 </div>
               </div>
