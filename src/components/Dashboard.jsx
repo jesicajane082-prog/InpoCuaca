@@ -775,125 +775,6 @@ export default function Dashboard() {
               )}
             </motion.section>
 
-
-          </div>
-        </div>
-
-        {/* Liga Indonesia - Only shown if data is available */}
-        <AnimatePresence>
-          {standings && standings.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mt-8 md:mt-16 space-y-6 md:space-y-8"
-            >
-              <div className="flex flex-wrap items-center justify-between gap-2 px-1 md:px-2">
-                <h2 className="text-base md:text-xl font-semibold text-slate-800 flex items-center gap-2 md:gap-3">
-                  <div className="w-10 h-10 bg-slate-50 rounded-full flex items-center justify-center flex-shrink-0">
-                    <Trophy className="w-5 h-5 text-slate-500" />
-                  </div>
-                  <span>Liga 1 Indonesia</span>
-                </h2>
-                <div className="flex items-center gap-2 text-xs font-medium text-slate-400">
-                  Musim 2025/2026
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                {/* Standings Table */}
-                <div className="lg:col-span-8">
-                    <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-                    <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                       <span className="text-xs font-semibold text-slate-500">Klasemen sementara</span>
-                       <ArrowRight className="w-3 h-3 text-slate-300" />
-                     </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm min-w-[520px]">
-                        <thead>
-                          <tr className="text-xs font-bold text-slate-300 border-b border-slate-50">
-                            <th className="text-left px-3 md:px-6 py-4">Pos</th>
-                            <th className="text-left py-4">Nama Klub</th>
-                            <th className="text-center py-4 px-2">M</th>
-                            <th className="text-center py-4 px-2">W</th>
-                            <th className="text-center py-4 px-2">D</th>
-                            <th className="text-center py-4 px-2">L</th>
-                            <th className="text-center py-4 px-2">Form</th>
-                            <th className="text-right px-3 md:px-6 py-4">Poin</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-50">
-                          {standings.map((team, i) => (
-                            <tr key={i} className={`hover:bg-slate-50/50 transition-all group border-l-4 ${
-                              i === 0 ? 'border-l-slate-300' : (i <= 2 ? 'border-l-slate-200' : 'border-l-transparent')
-                            }`}>
-                              <td className="px-3 md:px-6 py-3.5 text-slate-400 text-xs font-medium">{team.position || i + 1}</td>
-                              <td className="py-3.5">
-                                <div className="flex items-center gap-3">
-                                  {team.team_logo ? (
-                                    <img src={getLocalLogo(team.team_name, team.team_logo)} alt="" className="w-6 h-6 object-contain" referrerPolicy="no-referrer" />
-                                  ) : (
-                                    <div className="w-6 h-6 bg-slate-100 rounded-full" />
-                                  )}
-                                  <span className="text-slate-700 font-semibold truncate max-w-[120px] sm:max-w-[180px] md:max-w-none">{team.team_name}</span>
-                                </div>
-                              </td>
-                              <td className="text-center py-3.5 px-2 text-slate-500 font-medium">{team.match_played}</td>
-                              <td className="text-center py-3.5 px-2 text-slate-600 font-medium">{team.win}</td>
-                              <td className="text-center py-3.5 px-2 text-slate-400 font-medium">{team.draw}</td>
-                              <td className="text-center py-3.5 px-2 text-slate-400 font-medium">{team.lose}</td>
-                              <td className="text-center py-3.5 px-2">
-                                {team.form ? (
-                                  <div className="flex gap-0.5 justify-center">
-                                    {team.form.split('').slice(0,5).map((f, fi) => (
-                                      <span key={fi} className={`w-4 h-4 rounded-full text-[7px] font-extrabold flex items-center justify-center ${
-                                        f === 'W' ? 'bg-emerald-500 text-white' :
-                                        f === 'L' ? 'bg-rose-400 text-white' :
-                                        'bg-slate-200 text-slate-500'
-                                      }`}>{f}</span>
-                                    ))}
-                                  </div>
-                                ) : <span className="text-slate-200 text-xs">—</span>}
-                              </td>
-                              <td className="text-right px-3 md:px-6 py-3.5 font-bold text-slate-900 tabular-nums">{team.point}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Sidebar: Top Scorers & Upcoming Matches */}
-                <div className="lg:col-span-4 space-y-8">
-                  {/* Top Scorers Card */}
-                  <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-                    <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-                      <span className="text-xs font-semibold text-slate-500">Top skor</span>
-                    </div>
-                    {topScorers ? (
-                      <div className="divide-y divide-slate-50">
-                        {topScorers.map((player, i) => (
-                          <div key={i} className="flex items-center justify-between px-6 py-4 hover:bg-slate-50/50 transition-colors">
-                            <div className="flex items-center gap-3 min-w-0">
-                              <span className="text-xs font-bold text-slate-300 w-3">{i + 1}</span>
-                              {player.player_photo && <img src={player.player_photo} alt="" className="w-8 h-8 rounded-full object-cover border border-slate-100" />}
-                              <div className="min-w-0">
-                                <p className="text-sm font-semibold text-slate-800 truncate leading-none mb-1">{player.player_name}</p>
-                                <p className="text-[10px] font-medium text-slate-400 truncate tracking-wide">{player.team_name}</p>
-                              </div>
-                            </div>
-                            <div className="text-right pl-4">
-                              <span className="text-lg font-bold text-slate-900 tabular-nums">{player.goals}</span>
-                              <p className="text-[8px] font-bold text-slate-300 uppercase">Gol</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="p-10 text-center text-slate-300 text-xs font-light">Data pemain belum tersedia</div>
-                    )}
-                  </div>
-
                   {/* Upcoming Matches & AI Predictions Card */}
                   <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
                     <div className="px-4 md:px-6 py-3 md:py-4 border-b border-slate-100 bg-slate-50/50 flex flex-wrap items-center justify-between gap-2">
@@ -1023,6 +904,127 @@ export default function Dashboard() {
                       )
                     )}
                   </div>
+
+
+          </div>
+        </div>
+
+        {/* Liga Indonesia - Only shown if data is available */}
+        <AnimatePresence>
+          {standings && standings.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-8 md:mt-16 space-y-6 md:space-y-8"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2 px-1 md:px-2">
+                <h2 className="text-base md:text-xl font-semibold text-slate-800 flex items-center gap-2 md:gap-3">
+                  <div className="w-10 h-10 bg-slate-50 rounded-full flex items-center justify-center flex-shrink-0">
+                    <Trophy className="w-5 h-5 text-slate-500" />
+                  </div>
+                  <span>Liga 1 Indonesia</span>
+                </h2>
+                <div className="flex items-center gap-2 text-xs font-medium text-slate-400">
+                  Musim 2025/2026
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                {/* Standings Table */}
+                <div className="lg:col-span-8">
+                    <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                    <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                       <span className="text-xs font-semibold text-slate-500">Klasemen sementara</span>
+                       <ArrowRight className="w-3 h-3 text-slate-300" />
+                     </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm min-w-[520px]">
+                        <thead>
+                          <tr className="text-xs font-bold text-slate-300 border-b border-slate-50">
+                            <th className="text-left px-3 md:px-6 py-4">Pos</th>
+                            <th className="text-left py-4">Nama Klub</th>
+                            <th className="text-center py-4 px-2">M</th>
+                            <th className="text-center py-4 px-2">W</th>
+                            <th className="text-center py-4 px-2">D</th>
+                            <th className="text-center py-4 px-2">L</th>
+                            <th className="text-center py-4 px-2">Form</th>
+                            <th className="text-right px-3 md:px-6 py-4">Poin</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50">
+                          {standings.map((team, i) => (
+                            <tr key={i} className={`hover:bg-slate-50/50 transition-all group border-l-4 ${
+                              i === 0 ? 'border-l-slate-300' : (i <= 2 ? 'border-l-slate-200' : 'border-l-transparent')
+                            }`}>
+                              <td className="px-3 md:px-6 py-3.5 text-slate-400 text-xs font-medium">{team.position || i + 1}</td>
+                              <td className="py-3.5">
+                                <div className="flex items-center gap-3">
+                                  {team.team_logo ? (
+                                    <img src={getLocalLogo(team.team_name, team.team_logo)} alt="" className="w-6 h-6 object-contain" referrerPolicy="no-referrer" />
+                                  ) : (
+                                    <div className="w-6 h-6 bg-slate-100 rounded-full" />
+                                  )}
+                                  <span className="text-slate-700 font-semibold truncate max-w-[120px] sm:max-w-[180px] md:max-w-none">{team.team_name}</span>
+                                </div>
+                              </td>
+                              <td className="text-center py-3.5 px-2 text-slate-500 font-medium">{team.match_played}</td>
+                              <td className="text-center py-3.5 px-2 text-slate-600 font-medium">{team.win}</td>
+                              <td className="text-center py-3.5 px-2 text-slate-400 font-medium">{team.draw}</td>
+                              <td className="text-center py-3.5 px-2 text-slate-400 font-medium">{team.lose}</td>
+                              <td className="text-center py-3.5 px-2">
+                                {team.form ? (
+                                  <div className="flex gap-0.5 justify-center">
+                                    {team.form.split('').slice(0,5).map((f, fi) => (
+                                      <span key={fi} className={`w-4 h-4 rounded-full text-[7px] font-extrabold flex items-center justify-center ${
+                                        f === 'W' ? 'bg-emerald-500 text-white' :
+                                        f === 'L' ? 'bg-rose-400 text-white' :
+                                        'bg-slate-200 text-slate-500'
+                                      }`}>{f}</span>
+                                    ))}
+                                  </div>
+                                ) : <span className="text-slate-200 text-xs">—</span>}
+                              </td>
+                              <td className="text-right px-3 md:px-6 py-3.5 font-bold text-slate-900 tabular-nums">{team.point}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Sidebar: Top Scorers & Upcoming Matches */}
+                <div className="lg:col-span-4 space-y-8">
+                  {/* Top Scorers Card */}
+                  <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                    <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+                      <span className="text-xs font-semibold text-slate-500">Top skor</span>
+                    </div>
+                    {topScorers ? (
+                      <div className="divide-y divide-slate-50">
+                        {topScorers.map((player, i) => (
+                          <div key={i} className="flex items-center justify-between px-6 py-4 hover:bg-slate-50/50 transition-colors">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <span className="text-xs font-bold text-slate-300 w-3">{i + 1}</span>
+                              {player.player_photo && <img src={player.player_photo} alt="" className="w-8 h-8 rounded-full object-cover border border-slate-100" />}
+                              <div className="min-w-0">
+                                <p className="text-sm font-semibold text-slate-800 truncate leading-none mb-1">{player.player_name}</p>
+                                <p className="text-[10px] font-medium text-slate-400 truncate tracking-wide">{player.team_name}</p>
+                              </div>
+                            </div>
+                            <div className="text-right pl-4">
+                              <span className="text-lg font-bold text-slate-900 tabular-nums">{player.goals}</span>
+                              <p className="text-[8px] font-bold text-slate-300 uppercase">Gol</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-10 text-center text-slate-300 text-xs font-light">Data pemain belum tersedia</div>
+                    )}
+                  </div>
+
+
                 </div>
               </div>
             </motion.div>
