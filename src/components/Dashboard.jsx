@@ -1049,7 +1049,7 @@ export default function Dashboard() {
         </AnimatePresence>
 
         {/* Modern Rich Footer */}
-        <footer className="mt-16 md:mt-24 pt-10 pb-6 border-t border-slate-100 bg-slate-50/30 rounded-3xl px-6 md:px-10 text-slate-500">
+        <footer className="mt-32 md:mt-48 pt-10 pb-6 border-t border-slate-100 bg-slate-50/30 rounded-3xl px-6 md:px-10 text-slate-500">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10 text-left">
             {/* Left brand block */}
             <div className="space-y-3">
@@ -1084,7 +1084,7 @@ export default function Dashboard() {
               &copy; {new Date().getFullYear()} Ikko. Hak Cipta Dilindungi.
             </p>
             <p className="text-[11px] font-semibold text-slate-500 flex items-center gap-1 group justify-center sm:justify-end">
-              Dibuat dengan <span className="text-rose-500 animate-pulse">❤️</span> oleh <span className="text-slate-800 underline underline-offset-4 decoration-slate-200 group-hover:decoration-slate-400 transition-colors">Ikko</span>
+              Dikembangkan oleh <span className="text-slate-800 underline underline-offset-4 decoration-slate-200 group-hover:decoration-slate-400 transition-colors">Ikko</span>
             </p>
           </div>
         </footer>
