@@ -1485,7 +1485,7 @@ INSTRUKSI PENTING:
                   </div>
                   <div className="w-full relative h-[480px] rounded-2xl overflow-hidden border border-slate-100 bg-slate-50">
                     <iframe
-                      src={`https://s.tradingview.com/widgetembed/?frameElementId=tradingview_chart&symbol=${SYMBOL_MAP[selectedSymbol] || 'FX:EURUSD'}&interval=D&hidesidetoolbar=0&symboledit=1&saveimage=1&toolbarbg=f1f3f6&studies=%5B%5D&theme=light&style=1&timezone=Etc%2FUTC&studies_overrides=%7B%7D&overrides=%7B%7D&enabled_features=%5B%5D&disabled_features=%5B%5D&locale=en&utm_source=localhost&utm_medium=widget&utm_campaign=chart&utm_term=${selectedSymbol}`}
+                      src={`https://s.tradingview.com/widgetembed/?frameElementId=tradingview_chart&symbol=${encodeURIComponent(SYMBOL_MAP[selectedSymbol] || 'FX:EURUSD')}&interval=D&hidesidetoolbar=0&symboledit=1&saveimage=1&toolbarbg=f1f3f6&studies=%5B%5D&theme=light&style=1&timezone=Etc%2FUTC&studies_overrides=%7B%7D&overrides=%7B%7D&enabled_features=%5B%5D&disabled_features=%5B%5D&locale=en&utm_source=localhost&utm_medium=widget&utm_campaign=chart&utm_term=${selectedSymbol}`}
                       style={{ width: '100%', height: '100%', border: 'none' }}
                       title="TradingView Real-time Chart"
                     />
@@ -1605,7 +1605,7 @@ INSTRUKSI PENTING:
                   </h4>
                   <div className="w-full h-[320px] rounded-2xl overflow-hidden bg-slate-50 border border-slate-100">
                     <iframe 
-                      src={`https://s.tradingview.com/embed-widget/technical-analysis/?locale=id&symbol=${SYMBOL_MAP[selectedSymbol] || 'FX:EURUSD'}&interval=1D&width=100%&height=320&theme=light`}
+                      src={`https://s.tradingview.com/embed-widget/technical-analysis/?locale=id&symbol=${encodeURIComponent(SYMBOL_MAP[selectedSymbol] || 'FX:EURUSD')}&interval=1D&width=100%&height=320&theme=light`}
                       style={{ width: '100%', height: '100%', border: 'none' }}
                       title="Technical Analysis Gauge"
                     />
