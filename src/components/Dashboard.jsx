@@ -839,7 +839,7 @@ INSTRUKSI PENTING:
     'TLKM': 'IDX:TLKM'
   };
 
-  const MOCK_BOT_LOGS = {
+  const [botLogs, setBotLogs] = useState({
     'EURUSD': [
       { id: 1, type: 'SELL', entry: '1.08450', rrr: '1:2.3', pnl: 'PROFIT (+0.56%)', status: 'closed', time: '10 menit yang lalu' },
       { id: 2, type: 'BUY', entry: '1.08210', rrr: '1:2.0', pnl: 'LOSS (-0.31%)', status: 'closed', time: '2 jam yang lalu' }
@@ -866,9 +866,9 @@ INSTRUKSI PENTING:
     'TLKM': [
       { id: 1, type: 'BUY', entry: '3200', rrr: '1:2.1', pnl: 'RUNNING (+0.75%)', status: 'active', time: 'Aktif' }
     ]
-  };
+  });
 
-  const MOCK_PERFORMANCE_DATA = {
+  const [performanceData, setPerformanceData] = useState({
     'EURUSD': {
       strategyName: 'Smart Money Concepts (SMC) & Liquidity Sweeps',
       winRate: '68.2%',
@@ -949,7 +949,89 @@ INSTRUKSI PENTING:
       totalTrades: '12 Trades',
       analysisExplain: 'Bot memanfaatkan area jenuh jual (Oversold) pada RSI harian di dekat area Support psikologis kuat Rp3.200, mengantisipasi pemantulan teknikal jangka menengah.'
     }
-  };
+  });
+
+  // Live Trading Simulation Engine Loop (Runs every 15s)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const symbols = ['EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD', 'AAPL', 'TSLA', 'BBRI', 'TLKM'];
+      const randomSymbol = symbols[Math.floor(Math.random() * symbols.length)];
+      
+      setBotLogs(prevLogs => {
+        const symbolLogs = [...(prevLogs[randomSymbol] || [])];
+        
+        // 1. If active trade exists, resolve it!
+        const activeTradeIdx = symbolLogs.findIndex(log => log.status === 'active');
+        if (activeTradeIdx !== -1 && Math.random() > 0.4) {
+          const activeTrade = { ...symbolLogs[activeTradeIdx] };
+          const winRateVal = parseFloat(performanceData[randomSymbol]?.winRate || '68%') / 100;
+          const isWin = Math.random() < winRateVal;
+          
+          const rrrParts = activeTrade.rrr.split(':').map(Number);
+          const riskMultiplier = rrrParts[1] || 2.0;
+          const pnlVal = isWin 
+            ? `PROFIT (+${(0.20 * riskMultiplier).toFixed(2)}%)` 
+            : `LOSS (-${(0.20).toFixed(2)}%)`;
+          
+          activeTrade.pnl = pnlVal;
+          activeTrade.status = 'closed';
+          activeTrade.time = 'Baru saja selesai';
+          
+          symbolLogs[activeTradeIdx] = activeTrade;
+          
+          // Update portfolio returns
+          setPerformanceData(prevPerf => {
+            const currentSymbolPerf = { ...prevPerf[randomSymbol] };
+            const changePct = isWin ? (0.20 * riskMultiplier) : -0.20;
+            
+            const parsePct = (val) => parseFloat(val.replace(/[+%]/g, '')) || 0;
+            const new1D = parsePct(currentSymbolPerf.profit1D) + changePct;
+            const new1W = parsePct(currentSymbolPerf.profit1W) + changePct;
+            const new1M = parsePct(currentSymbolPerf.profit1M) + changePct;
+            
+            currentSymbolPerf.profit1D = `${new1D >= 0 ? '+' : ''}${new1D.toFixed(2)}%`;
+            currentSymbolPerf.profit1W = `${new1W >= 0 ? '+' : ''}${new1W.toFixed(2)}%`;
+            currentSymbolPerf.profit1M = `${new1M >= 0 ? '+' : ''}${new1M.toFixed(2)}%`;
+            
+            const totalTr = parseInt(currentSymbolPerf.totalTrades) || 0;
+            currentSymbolPerf.totalTrades = `${totalTr + 1} Trades`;
+            
+            return {
+              ...prevPerf,
+              [randomSymbol]: currentSymbolPerf
+            };
+          });
+        } 
+        // 2. Spawn new running trade
+        else if (symbolLogs.filter(log => log.status === 'active').length === 0) {
+          const lastLog = symbolLogs[0] || { entry: '1.08000' };
+          const basePrice = parseFloat(lastLog.entry.replace(/,/g, '')) || 1.08;
+          const delta = basePrice * (Math.random() - 0.5) * 0.002;
+          const newEntry = (basePrice + delta).toFixed(randomSymbol.includes('JPY') ? 2 : randomSymbol.includes('BBRI') || randomSymbol.includes('TLKM') ? 0 : 5);
+          
+          const newTrade = {
+            id: Date.now(),
+            type: Math.random() > 0.5 ? 'BUY' : 'SELL',
+            entry: newEntry,
+            rrr: performanceData[randomSymbol]?.avgRrr || '1:2.0',
+            pnl: 'RUNNING (+0.00%)',
+            status: 'active',
+            time: 'Aktif'
+          };
+          
+          symbolLogs.unshift(newTrade);
+          if (symbolLogs.length > 5) symbolLogs.pop();
+        }
+        
+        return {
+          ...prevLogs,
+          [randomSymbol]: symbolLogs
+        };
+      });
+    }, 15000);
+    
+    return () => clearInterval(interval);
+  }, [performanceData]);
 
   return (
     <div className="min-h-screen bg-white text-slate-700 pb-16 selection:bg-slate-100 selection:text-slate-900">
@@ -1677,7 +1759,7 @@ INSTRUKSI PENTING:
                         </tr>
                       </thead>
                       <tbody>
-                        {(MOCK_BOT_LOGS[selectedSymbol] || []).map((log, idx) => (
+                        {(botLogs[selectedSymbol] || []).map((log, idx) => (
                           <tr key={log.id} className="border-b border-slate-50/60 hover:bg-slate-50/30 transition-colors font-semibold">
                             <td className="px-6 py-4 text-slate-400 font-medium">{log.time}</td>
                             <td className="px-4 py-4">
@@ -1720,13 +1802,13 @@ INSTRUKSI PENTING:
                       <div>
                         <h3 className="text-sm font-bold text-slate-800">📊 Laporan Performa & Backtesting AI</h3>
                         <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">
-                          Strategi: {MOCK_PERFORMANCE_DATA[selectedSymbol]?.strategyName || 'Kuantitatif'}
+                          Strategi: {performanceData[selectedSymbol]?.strategyName || 'Kuantitatif'}
                         </p>
                       </div>
                     </div>
                     
                     <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-3 py-1.5 rounded-lg">
-                      🎯 WIN RATE TEKNIK: {MOCK_PERFORMANCE_DATA[selectedSymbol]?.winRate || '68%'}
+                      🎯 WIN RATE TEKNIK: {performanceData[selectedSymbol]?.winRate || '68%'}
                     </span>
                   </div>
 
@@ -1737,11 +1819,11 @@ INSTRUKSI PENTING:
                     <div className="bg-slate-50/50 border border-slate-100 p-4 rounded-2xl text-center space-y-1 hover:bg-slate-50 transition-colors">
                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">1 Hari (Today)</p>
                       <p className={`text-lg font-bold ${
-                        (MOCK_PERFORMANCE_DATA[selectedSymbol]?.profit1D || '').includes('-') 
+                        (performanceData[selectedSymbol]?.profit1D || '').includes('-') 
                           ? 'text-rose-500' 
                           : 'text-emerald-600'
                       }`}>
-                        {MOCK_PERFORMANCE_DATA[selectedSymbol]?.profit1D || '+0.00%'}
+                        {performanceData[selectedSymbol]?.profit1D || '+0.00%'}
                       </p>
                       <p className="text-[9px] text-slate-400 font-medium font-semibold">Sesi Aktif</p>
                     </div>
@@ -1750,7 +1832,7 @@ INSTRUKSI PENTING:
                     <div className="bg-slate-50/50 border border-slate-100 p-4 rounded-2xl text-center space-y-1 hover:bg-slate-50 transition-colors">
                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">1 Minggu (1W)</p>
                       <p className="text-lg font-bold text-emerald-600">
-                        {MOCK_PERFORMANCE_DATA[selectedSymbol]?.profit1W || '+0.00%'}
+                        {performanceData[selectedSymbol]?.profit1W || '+0.00%'}
                       </p>
                       <p className="text-[9px] text-slate-400 font-medium font-semibold">Komulatif 7 Hari</p>
                     </div>
@@ -1759,7 +1841,7 @@ INSTRUKSI PENTING:
                     <div className="bg-slate-50/50 border border-slate-100 p-4 rounded-2xl text-center space-y-1 hover:bg-slate-50 transition-colors">
                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">1 Bulan (1M)</p>
                       <p className="text-lg font-bold text-emerald-600">
-                        {MOCK_PERFORMANCE_DATA[selectedSymbol]?.profit1M || '+0.00%'}
+                        {performanceData[selectedSymbol]?.profit1M || '+0.00%'}
                       </p>
                       <p className="text-[9px] text-slate-400 font-medium font-semibold">Pengembalian 30 Hari</p>
                     </div>
@@ -1773,14 +1855,14 @@ INSTRUKSI PENTING:
                       Ulasan Entry & Analisa Backtesting Bot
                     </span>
                     <p className="text-xs text-slate-600 leading-relaxed font-semibold select-text">
-                      {MOCK_PERFORMANCE_DATA[selectedSymbol]?.analysisExplain || 'Mengkalkulasi performa teknik...'}
+                      {performanceData[selectedSymbol]?.analysisExplain || 'Mengkalkulasi performa teknik...'}
                     </p>
                   </div>
 
                   {/* Extra Stats Bar */}
                   <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold px-2 pt-2 border-t border-slate-100 bg-white">
-                    <span>📈 Rata-rata Risk/Reward: <span className="text-slate-700">{MOCK_PERFORMANCE_DATA[selectedSymbol]?.avgRrr}</span></span>
-                    <span>📊 Total Sampel Sinyal: <span className="text-slate-700">{MOCK_PERFORMANCE_DATA[selectedSymbol]?.totalTrades}</span></span>
+                    <span>📈 Rata-rata Risk/Reward: <span className="text-slate-700">{performanceData[selectedSymbol]?.avgRrr}</span></span>
+                    <span>📊 Total Sampel Sinyal: <span className="text-slate-700">{performanceData[selectedSymbol]?.totalTrades}</span></span>
                   </div>
                 </div>
               </div>
