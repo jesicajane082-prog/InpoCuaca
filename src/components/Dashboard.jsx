@@ -266,25 +266,30 @@ function NativeTechnicalGauge({ symbol }) {
   React.useEffect(() => {
     if (containerRef.current) {
       containerRef.current.innerHTML = '';
+      
+      // Re-create the required inner widget div for TradingView script targeting
+      const widgetDiv = document.createElement('div');
+      widgetDiv.className = 'tradingview-widget-container__widget';
+      containerRef.current.appendChild(widgetDiv);
+
+      const script = document.createElement('script');
+      script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-technical-analysis.js';
+      script.type = 'text/javascript';
+      script.async = true;
+      script.innerHTML = JSON.stringify({
+        interval: '1D',
+        width: '100%',
+        isTransparent: false,
+        height: 320,
+        symbol: symbol,
+        showIntervalTabs: true,
+        displayMode: 'single',
+        locale: 'id',
+        colorTheme: 'light'
+      });
+
+      containerRef.current.appendChild(script);
     }
-
-    const script = document.createElement('script');
-    script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-technical-analysis.js';
-    script.type = 'text/javascript';
-    script.async = true;
-    script.innerHTML = JSON.stringify({
-      interval: '1D',
-      width: '100%',
-      isTransparent: false,
-      height: 320,
-      symbol: symbol,
-      showIntervalTabs: true,
-      displayMode: 'single',
-      locale: 'id',
-      colorTheme: 'light'
-    });
-
-    containerRef.current.appendChild(script);
   }, [symbol]);
 
   return (
