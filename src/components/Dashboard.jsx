@@ -225,7 +225,7 @@ function NativeTradingViewChart({ symbol }) {
     const widgetDiv = document.createElement('div');
     widgetDiv.id = 'tradingview_advanced_chart';
     widgetDiv.style.width = '100%';
-    widgetDiv.style.height = '100%';
+    widgetDiv.style.height = '480px';
     containerRef.current.appendChild(widgetDiv);
 
     const script = document.createElement('script');
@@ -236,7 +236,7 @@ function NativeTradingViewChart({ symbol }) {
       if (typeof window.TradingView !== 'undefined') {
         new window.TradingView.widget({
           width: '100%',
-          height: '100%',
+          height: 480,
           symbol: symbol,
           interval: 'D',
           timezone: 'Etc/UTC',
@@ -255,7 +255,7 @@ function NativeTradingViewChart({ symbol }) {
   }, [symbol]);
 
   return (
-    <div ref={containerRef} className="w-full h-full min-h-[480px]" />
+    <div ref={containerRef} className="w-full h-[480px]" />
   );
 }
 
