@@ -245,6 +245,10 @@ export default function Dashboard() {
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
   const [isCityDropdownOpen, setIsCityDropdownOpen] = useState(false);
   const [citySearchQuery, setCitySearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState('portal'); // 'portal' or 'trading'
+  const [selectedSymbol, setSelectedSymbol] = useState('EURUSD');
+  const [tradingLoading, setTradingLoading] = useState(false);
+  const [tradingAnalysis, setTradingAnalysis] = useState('');
 
 
   const handleSendMessage = async (customMessage = null) => {
@@ -338,6 +342,72 @@ INSTRUKSI PENTING:
       ]);
     } finally {
       setChatLoading(false);
+    }
+  };
+
+  const handleTradingAnalysis = async () => {
+    setTradingLoading(true);
+    setTradingAnalysis('');
+    
+    if (!hfToken.trim()) {
+      setTimeout(() => {
+        setTradingAnalysis("Maaf, Analisis AI tidak dapat dijalankan karena Token Hugging Face belum dikonfigurasi di file .env server.");
+        setTradingLoading(false);
+      }, 800);
+      return;
+    }
+
+    const systemPrompt = `Anda adalah Asisten Analis Finansial Kuantitatif (Quant Trading Analyst) Senior bertaraf dunia. Tugas Anda adalah memberikan analisis teknikal & manajemen risiko profesional, mendalam, dan ringkas mengenai aset Forex atau Saham yang dipilih.
+    
+    Anda wajib memformat tanggapan Anda secara terstruktur menggunakan panduan berikut (Gunakan Bahasa Indonesia yang elegan dan profesional):
+    
+    1. 📊 TESIS ANALISIS (1 Paragraf Singkat): Tren arah harga saat ini dan pemicu utamanya (teknikal/fundamental).
+    2. 🎯 LEVEL PERDAGANGAN:
+       - Harga Entry Pengukur (Target Beli/Jual)
+       - Stop Loss (Batas Kerugian)
+       - Take Profit (Target Keuntungan)
+    3. ⚖️ MANAJEMEN RISIKO (Risk-to-Reward Ratio): Jelaskan rasio risiko vs imbal hasil hasil kalkulasi Anda (target RRR minimal 1:2).
+    4. 📈 PROBABILITAS KEMENANGAN (Win Probability): Sebutkan persentase peluang keberhasilan transaksi ini (contoh: 65%) berserta alasan teknikal di baliknya (misal pola grafik, RSI jenuh, dll).
+    5. ⚠️ RISIKO UTAMA: 1 kalimat mengenai ancaman berita kalender ekonomi terdekat.`;
+
+    const userPrompt = `Lakukan analisis lengkap dan kuantitatif untuk aset: ${selectedSymbol} (${
+      selectedSymbol === 'EURUSD' ? 'Forex: Euro / US Dollar' : 
+      selectedSymbol === 'GBPUSD' ? 'Forex: British Pound / US Dollar' : 
+      selectedSymbol === 'USDJPY' ? 'Forex: US Dollar / Japanese Yen' : 
+      selectedSymbol === 'XAUUSD' ? 'Commodity: Emas / US Dollar' : 
+      selectedSymbol === 'AAPL' ? 'Saham: Apple Inc. (US)' : 
+      selectedSymbol === 'TSLA' ? 'Saham: Tesla Inc. (US)' : 
+      selectedSymbol === 'BBRI' ? 'Saham: Bank Rakyat Indonesia (IDX)' : 
+      'Saham: Telkom Indonesia (IDX)'
+    }).`;
+
+    try {
+      const response = await fetch('https://router.huggingface.co/v1/chat/completions', {
+        headers: {
+          'Authorization': `Bearer ${hfToken}`,
+          'Content-Type': 'application/json'
+        },
+        method: 'POST',
+        body: JSON.stringify({
+          model: selectedModel,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ],
+          max_tokens: 600
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error("Gagal mengambil data dari server AI.");
+      }
+
+      const data = await response.json();
+      setTradingAnalysis(data.choices[0].message.content);
+    } catch (err) {
+      setTradingAnalysis("Terjadi kesalahan saat memanggil AI untuk analisis perdagangan. Pastikan token Hugging Face Anda aktif dan coba lagi.");
+    } finally {
+      setTradingLoading(false);
     }
   };
 
@@ -674,9 +744,85 @@ INSTRUKSI PENTING:
     );
   }
 
+  const SYMBOL_MAP = {
+    'EURUSD': 'FX:EURUSD',
+    'GBPUSD': 'FX:GBPUSD',
+    'USDJPY': 'FX:USDJPY',
+    'XAUUSD': 'OANDA:XAUUSD',
+    'AAPL': 'NASDAQ:AAPL',
+    'TSLA': 'NASDAQ:TSLA',
+    'BBRI': 'IDX:BBRI',
+    'TLKM': 'IDX:TLKM'
+  };
+
+  const MOCK_BOT_LOGS = {
+    'EURUSD': [
+      { id: 1, type: 'SELL', entry: '1.08450', rrr: '1:2.3', pnl: 'PROFIT (+0.56%)', status: 'closed', time: '10 menit yang lalu' },
+      { id: 2, type: 'BUY', entry: '1.08210', rrr: '1:2.0', pnl: 'LOSS (-0.31%)', status: 'closed', time: '2 jam yang lalu' }
+    ],
+    'GBPUSD': [
+      { id: 1, type: 'BUY', entry: '1.25410', rrr: '1:2.5', pnl: 'PROFIT (+0.82%)', status: 'closed', time: '45 menit yang lalu' }
+    ],
+    'USDJPY': [
+      { id: 1, type: 'BUY', entry: '155.60', rrr: '1:2.1', pnl: 'RUNNING (+0.44%)', status: 'active', time: 'Aktif' }
+    ],
+    'XAUUSD': [
+      { id: 1, type: 'BUY', entry: '2412.50', rrr: '1:2.7', pnl: 'PROFIT (+1.24%)', status: 'closed', time: '5 menit yang lalu' },
+      { id: 2, type: 'SELL', entry: '2430.10', rrr: '1:2.4', pnl: 'RUNNING (+0.18%)', status: 'active', time: 'Aktif' }
+    ],
+    'AAPL': [
+      { id: 1, type: 'BUY', entry: '182.30', rrr: '1:2.2', pnl: 'PROFIT (+1.95%)', status: 'closed', time: '1 hari yang lalu' }
+    ],
+    'TSLA': [
+      { id: 1, type: 'BUY', entry: '174.60', rrr: '1:2.6', pnl: 'LOSS (-0.85%)', status: 'closed', time: '5 jam yang lalu' }
+    ],
+    'BBRI': [
+      { id: 1, type: 'BUY', entry: '4680', rrr: '1:2.5', pnl: 'PROFIT (+3.20%)', status: 'closed', time: '3 jam yang lalu' }
+    ],
+    'TLKM': [
+      { id: 1, type: 'BUY', entry: '3200', rrr: '1:2.1', pnl: 'RUNNING (+0.75%)', status: 'active', time: 'Aktif' }
+    ]
+  };
+
   return (
     <div className="min-h-screen bg-white text-slate-700 pb-16 selection:bg-slate-100 selection:text-slate-900">
-      <div className="max-w-5xl mx-auto px-4 md:px-6 py-6 md:py-16">
+      
+      {/* Sleek Floating Tab Switcher at the very top */}
+      <div className="max-w-5xl mx-auto px-4 md:px-6 pt-6 md:pt-10">
+        <div className="flex bg-slate-100/60 p-1 rounded-2xl max-w-[340px] md:max-w-[380px] border border-slate-200/50 shadow-sm relative z-30">
+          <button
+            onClick={() => setActiveTab('portal')}
+            className={`flex-1 py-2 px-3 text-xs md:text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-2 ${
+              activeTab === 'portal'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-500 hover:text-slate-900'
+            }`}
+          >
+            🌤️ Portal Publik
+          </button>
+          <button
+            onClick={() => setActiveTab('trading')}
+            className={`flex-1 py-2 px-3 text-xs md:text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-2 ${
+              activeTab === 'trading'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-500 hover:text-slate-900'
+            }`}
+          >
+            📈 Hub Trading AI
+          </button>
+        </div>
+      </div>
+
+      <div className="max-w-5xl mx-auto px-4 md:px-6 py-6 md:py-8">
+        
+        {/* TAB 1: Portal Publik (Existing Content) */}
+        {activeTab === 'portal' && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <div className="max-w-5xl mx-auto">
 
         {/* Header */}
         <header className="flex flex-col md:flex-row md:items-end justify-between gap-4 md:gap-8 mb-6 md:mb-12">
@@ -1258,6 +1404,219 @@ INSTRUKSI PENTING:
             <span className="w-1 h-1 bg-slate-200 rounded-full" />
           </div>
         </footer>
+            </div>
+          </motion.div>
+        )}
+
+        {/* TAB 2: Hub Trading AI (Forex & Stocks) */}
+        {activeTab === 'trading' && (
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            className="space-y-8"
+          >
+            {/* Header Hub Trading */}
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 pb-4 border-b border-slate-100">
+              <div className="text-left">
+                <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-800 mb-2">Hub Trading AI</h1>
+                <p className="text-slate-400 text-sm">
+                  Integrasi Grafik Real-time Forex & Saham Terkemuka didukung Analis Finansial AI Kuantitatif.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50 px-3 py-1.5 border border-slate-100 rounded-lg animate-pulse">
+                  ⚡ STATUS BOT: AKTIF
+                </span>
+              </div>
+            </div>
+
+            {/* Selector Symbol Pills */}
+            <div className="flex flex-col gap-3">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wide text-left">Pilih Aset Perdagangan</span>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { id: 'EURUSD', label: '🇪🇺🇺🇸 EUR/USD', type: 'Forex' },
+                  { id: 'GBPUSD', label: '🇬🇧🇺🇸 GBP/USD', type: 'Forex' },
+                  { id: 'USDJPY', label: '🇺🇸🇯🇵 USD/JPY', type: 'Forex' },
+                  { id: 'XAUUSD', label: '🏆🇺🇸 XAU/USD (Gold)', type: 'Forex' },
+                  { id: 'BBRI', label: '🏦🇮🇩 BBRI (IDX)', type: 'Saham' },
+                  { id: 'TLKM', label: '📞🇮🇩 TLKM (IDX)', type: 'Saham' },
+                  { id: 'AAPL', label: '🍎🇺🇸 AAPL (US)', type: 'Saham' },
+                  { id: 'TSLA', label: '⚡🇺🇸 TSLA (US)', type: 'Saham' }
+                ].map((s) => {
+                  const isActive = selectedSymbol === s.id;
+                  return (
+                    <button
+                      key={s.id}
+                      onClick={() => {
+                        setSelectedSymbol(s.id);
+                        setTradingAnalysis('');
+                      }}
+                      className={`px-4 py-2 text-xs font-bold rounded-xl transition-all active:scale-95 border ${
+                        isActive 
+                          ? 'bg-slate-900 border-slate-900 text-white shadow-sm' 
+                          : 'bg-white hover:bg-slate-50 border-slate-200/80 text-slate-600'
+                      }`}
+                    >
+                      {s.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Grid Layout: Chart & AI Analyst */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+              
+              {/* Left Column: Live TradingView Chart (8 cols) */}
+              <div className="lg:col-span-8 space-y-6">
+                <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm p-4 text-left">
+                  <div className="flex items-center justify-between mb-4 px-2">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse" />
+                      <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">
+                        Grafik Real-time TradingView ({selectedSymbol})
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-slate-400 font-bold bg-slate-50 border px-2.5 py-1 rounded-md">
+                      Interval: Harian (1D)
+                    </span>
+                  </div>
+                  <div className="w-full relative h-[480px] rounded-2xl overflow-hidden border border-slate-100 bg-slate-50">
+                    <iframe
+                      src={`https://s.tradingview.com/widgetembed/?frameElementId=tradingview_chart&symbol=${SYMBOL_MAP[selectedSymbol] || 'FX:EURUSD'}&interval=D&hidesidetoolbar=0&symboledit=1&saveimage=1&toolbarbg=f1f3f6&studies=%5B%5D&theme=light&style=1&timezone=Etc%2FUTC&studies_overrides=%7B%7D&overrides=%7B%7D&enabled_features=%5B%5D&disabled_features=%5B%5D&locale=en&utm_source=localhost&utm_medium=widget&utm_campaign=chart&utm_term=${selectedSymbol}`}
+                      style={{ width: '100%', height: '100%', border: 'none' }}
+                      title="TradingView Real-time Chart"
+                    />
+                  </div>
+                </div>
+
+                {/* Algorithmic Bot Simulation Log */}
+                <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
+                  <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                    <span className="text-xs font-bold text-slate-800 flex items-center gap-2 text-left">
+                      ⚡ Simulasi Eksekusi Algoritma Bot ({selectedSymbol})
+                    </span>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                      Live Trading Logs
+                    </span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs text-left min-w-[500px]">
+                      <thead>
+                        <tr className="text-[10px] font-bold text-slate-400 border-b border-slate-50 uppercase tracking-wider bg-slate-50/20">
+                          <th className="px-6 py-3">Waktu</th>
+                          <th className="px-4 py-3">Aksi</th>
+                          <th className="px-4 py-3">Harga Entry</th>
+                          <th className="px-4 py-3">Risk-Reward</th>
+                          <th className="px-4 py-3 text-right pr-6">Hasil PnL</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(MOCK_BOT_LOGS[selectedSymbol] || []).map((log, idx) => (
+                          <tr key={log.id} className="border-b border-slate-50/60 hover:bg-slate-50/30 transition-colors font-semibold">
+                            <td className="px-6 py-4 text-slate-400 font-medium">{log.time}</td>
+                            <td className="px-4 py-4">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                log.type === 'BUY' 
+                                  ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' 
+                                  : 'bg-rose-50 text-rose-600 border border-rose-100'
+                              }`}>
+                                {log.type}
+                              </span>
+                            </td>
+                            <td className="px-4 py-4 text-slate-800">{log.entry}</td>
+                            <td className="px-4 py-4 text-slate-500 font-mono">{log.rrr}</td>
+                            <td className="px-4 py-4 text-right pr-6 font-mono">
+                              <span className={`${
+                                log.pnl.includes('PROFIT') 
+                                  ? 'text-emerald-600 font-bold' 
+                                  : log.pnl.includes('LOSS') 
+                                    ? 'text-rose-500 font-bold' 
+                                    : 'text-amber-500 font-bold animate-pulse'
+                              }`}>
+                                {log.pnl}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column: AI Analysis Panel & Technical Gauge (4 cols) */}
+              <div className="lg:col-span-4 space-y-6">
+                
+                {/* AI Analyst Insights Panel */}
+                <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm flex flex-col">
+                  <div className="flex items-center gap-2.5 mb-4">
+                    <div className="w-8 h-8 bg-slate-100 border border-slate-200/50 rounded-xl flex items-center justify-center flex-shrink-0">
+                      <Brain className="w-4 h-4 text-slate-600" />
+                    </div>
+                    <div className="text-left">
+                      <h3 className="text-sm font-bold text-slate-800">Otak AI Kuantitatif</h3>
+                      <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Deepseek / Qwen Quant Model</p>
+                    </div>
+                  </div>
+
+                  {/* Analysis Content Display */}
+                  <div className="flex-1 bg-slate-50/50 border border-slate-100 rounded-2xl p-4.5 min-h-[220px] text-left relative overflow-hidden flex flex-col justify-center">
+                    {tradingLoading ? (
+                      <div className="flex flex-col items-center justify-center gap-4 text-center py-6">
+                        <div className="w-7 h-7 border-2 border-slate-200 border-t-slate-500 rounded-full animate-spin" />
+                        <div className="space-y-1">
+                          <p className="text-xs font-bold text-slate-600">AI Sedang Menganalisis...</p>
+                          <p className="text-[10px] text-slate-400 font-medium">Mengkalkulasi Risk/Reward & Win Probability</p>
+                        </div>
+                      </div>
+                    ) : tradingAnalysis ? (
+                      <div className="text-xs leading-relaxed text-slate-600 whitespace-pre-wrap font-semibold select-text">
+                        {tradingAnalysis}
+                      </div>
+                    ) : (
+                      <div className="text-center py-6 space-y-2.5">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-trending-up w-7 h-7 text-slate-300 mx-auto"><path d="m22 7-8.5 8.5-5-5L2 17"/><path d="M16 7h6v6"/></svg>
+                        <p className="text-xs font-bold text-slate-600">Belum ada analisis</p>
+                        <p className="text-[10px] text-slate-400 leading-normal max-w-[200px] mx-auto font-semibold">
+                          Klik tombol di bawah untuk meminta analisis risiko kuantitatif (Entry/SL/TP) dari AI.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Trigger Button */}
+                  <button
+                    onClick={() => handleTradingAnalysis()}
+                    disabled={tradingLoading}
+                    className="mt-5 w-full py-3 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:scale-100 text-white text-xs font-bold rounded-xl active:scale-95 transition-all flex items-center justify-center gap-2 shadow-sm"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    {tradingLoading ? 'Menganalisa...' : 'Minta Analisa AI'}
+                  </button>
+                </div>
+
+                {/* Technical Gauge Meter */}
+                <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm p-4">
+                  <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-left mb-3 px-1">
+                    Indikator Teknis Kompas ({selectedSymbol})
+                  </h4>
+                  <div className="w-full h-[320px] rounded-2xl overflow-hidden bg-slate-50 border border-slate-100">
+                    <iframe 
+                      src={`https://s.tradingview.com/embed-widget/technical-analysis/?locale=id&symbol=${SYMBOL_MAP[selectedSymbol] || 'FX:EURUSD'}&interval=1D&width=100%&height=320&theme=light`}
+                      style={{ width: '100%', height: '100%', border: 'none' }}
+                      title="Technical Analysis Gauge"
+                    />
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </motion.div>
+        )}
+
         {/* Floating Chat Button */}
         <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
           <AnimatePresence>
