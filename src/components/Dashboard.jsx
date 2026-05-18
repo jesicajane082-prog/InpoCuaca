@@ -1171,7 +1171,42 @@ INSTRUKSI PENTING:
     return () => clearInterval(interval);
   }, [performanceData, livePrices]);
 
-    if (loading && !prayerSchedule && !weather) {
+  const exportToCSV = () => {
+    const logs = botLogs[selectedSymbol] || [];
+    if (logs.length === 0) {
+      alert('Belum ada data untuk diunduh.');
+      return;
+    }
+
+    const headers = ['Waktu', 'Aksi', 'Timeframe', 'Harga Entry', 'Risk-Reward', 'Probabilitas', 'Harga SL', 'Harga TP', 'Hasil PnL'];
+    const rows = logs.map(log => [
+      log.time,
+      log.type,
+      log.timeframe || 'M15',
+      log.entry,
+      log.rrr,
+      log.probability || '-',
+      log.sl || '-',
+      log.tp || '-',
+      log.pnl
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `Laporan_Trading_${selectedSymbol}_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  if (loading && !prayerSchedule && !weather) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <motion.div
@@ -1898,9 +1933,18 @@ INSTRUKSI PENTING:
                     <span className="text-xs font-bold text-slate-800 flex items-center gap-2 text-left">
                       ⚡ Simulasi Eksekusi Algoritma Bot ({selectedSymbol})
                     </span>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                      Live Trading Logs
-                    </span>
+                    <div className="flex items-center gap-3">
+                      <button 
+                        onClick={exportToCSV}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-[10px] font-extrabold tracking-wide uppercase transition-colors"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-download"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                        Unduh Laporan (CSV)
+                      </button>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider hidden sm:block">
+                        Live Trading Logs
+                      </span>
+                    </div>
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-xs text-left min-w-[500px]">
