@@ -218,7 +218,7 @@ function getDefaultPerformance() {
 }
 
 // Endpoint Handler Utama (Cron Job / API Request)
-export default async function handler(req, res) {
+async function vercelHandler(req, res) {
   try {
     const timestamp = Date.now();
     const timeStr = new Date().toLocaleString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB';
@@ -621,3 +621,43 @@ export default async function handler(req, res) {
     });
   }
 }
+
+// Ekspor default untuk Vercel
+export default vercelHandler;
+
+// Adapter untuk Netlify Functions
+export const handler = async (event, context) => {
+  let responseStatusCode = 200;
+  let responseBody = {};
+
+  let parsedBody = {};
+  try {
+    if (event.body) {
+      parsedBody = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
+    }
+  } catch(e) {}
+
+  const req = {
+    method: event.httpMethod,
+    body: parsedBody
+  };
+
+  const res = {
+    status: (code) => {
+      responseStatusCode = code;
+      return res;
+    },
+    json: (data) => {
+      responseBody = data;
+      return res;
+    }
+  };
+
+  await vercelHandler(req, res);
+
+  return {
+    statusCode: responseStatusCode,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(responseBody)
+  };
+};
