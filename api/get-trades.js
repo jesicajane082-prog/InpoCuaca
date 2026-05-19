@@ -12,9 +12,9 @@ function getDefaultPerformance() {
   const symbols = ['EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD', 'AAPL', 'TSLA', 'BBRI', 'TLKM'];
   const defaultMap = {
     'EURUSD': {
-      strategyName: 'SMC x Supply & Demand (S&D) + Support Resistance',
+      strategyName: 'SMC x Elliott Wave Theory x S&D',
       winRate: '68.2%', avgRrr: '1:2.3', profit1D: '+0.00%', profit1W: '+0.00%', profit1M: '+0.00%', totalTrades: '0 Trades',
-      analysisExplain: 'Analisis M15 (Intraday) difokuskan pada presisi momentum H4/H1 Trend. Algoritma menggabungkan SMC (Smart Money Concepts) untuk melacak pergerakan likuiditas institusi (CHoCH), divalidasi dengan area S&D kuat.'
+      analysisExplain: 'Analisis M15 difokuskan pada pergerakan pasar impulsif (Wave 3/5) dan korektif (Wave ABC) dari teori Elliott Wave, dipadukan dengan konsep SMC (CHoCH/Order Block) dan level S&D kuat untuk akurasi entri.'
     },
     'GBPUSD': {
       strategyName: 'Order Block & Fair Value Gap (FVG) Refinement',

@@ -226,9 +226,9 @@ function getDefaultPerformance() {
   const symbols = ['EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD', 'AAPL', 'TSLA', 'BBRI', 'TLKM'];
   const defaultMap = {
     'EURUSD': {
-      strategyName: 'SMC x Supply & Demand (S&D) + Support Resistance',
+      strategyName: 'SMC x Elliott Wave Theory x S&D',
       winRate: '68.2%', avgRrr: '1:2.3', profit1D: '+0.00%', profit1W: '+0.00%', profit1M: '+0.00%', totalTrades: '0 Trades',
-      analysisExplain: 'Analisis M15 (Intraday) difokuskan pada presisi momentum H4/H1 Trend. Algoritma menggabungkan SMC (Smart Money Concepts) untuk melacak pergerakan likuiditas institusi (CHoCH), divalidasi dengan area S&D kuat.'
+      analysisExplain: 'Analisis M15 difokuskan pada pergerakan pasar impulsif (Wave 3/5) dan korektif (Wave ABC) dari teori Elliott Wave, dipadukan dengan konsep SMC (CHoCH/Order Block) dan level S&D kuat untuk akurasi entri.'
     },
     'GBPUSD': {
       strategyName: 'Order Block & Fair Value Gap (FVG) Refinement',
@@ -554,12 +554,13 @@ async function vercelHandler(req, res) {
     const minProbability = db.settings?.minProbability || 70;
     const riskRewardRatio = db.settings?.riskRewardRatio || 2.3;
 
-    symbols.forEach((sym, index) => {
-      if (!activeSymbols.includes(sym)) return;
+    for (let index = 0; index < symbols.length; index++) {
+      const sym = symbols[index];
+      if (!activeSymbols.includes(sym)) continue;
 
       // Pastikan tidak ada trade aktif untuk symbol ini sebelum membuka trade baru
       const hasActive = db.trades.some(t => t.symbol === sym && t.status === 'active');
-      if (hasActive) return;
+      if (hasActive) continue;
 
       const currentLive = livePrices[sym];
       const symbolSeed = sym.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
@@ -609,6 +610,17 @@ async function vercelHandler(req, res) {
       if (h1Trend === 'BULLISH') {
         bias = 'BUY ONLY (Tren H1 Bullish)';
         
+        // 0. Konfluensi Elliott Wave
+        const ew = await getCurrentElliottWave(sym);
+        if (ew.wave !== 'None') {
+          if (ew.type === 'BULLISH') {
+            probability += ew.confluenceBonus;
+            confluences.push(`Elliott Wave ${ew.wave}`);
+          } else if (ew.type === 'BEARISH') {
+            probability -= 10;
+          }
+        }
+
         // 1. Konfluensi SMC
         if (liqSweep === 'BULLISH_SWEEP') {
           probability += 10;
@@ -650,6 +662,17 @@ async function vercelHandler(req, res) {
         executeTrade = probability >= minProbability;
       } else if (h1Trend === 'BEARISH') {
         bias = 'SELL ONLY (Tren H1 Bearish)';
+
+        // 0. Konfluensi Elliott Wave
+        const ew = await getCurrentElliottWave(sym);
+        if (ew.wave !== 'None') {
+          if (ew.type === 'BEARISH') {
+            probability += ew.confluenceBonus;
+            confluences.push(`Elliott Wave ${ew.wave}`);
+          } else if (ew.type === 'BULLISH') {
+            probability -= 10;
+          }
+        }
 
         // 1. Konfluensi SMC
         if (liqSweep === 'BEARISH_SWEEP') {
@@ -752,7 +775,7 @@ async function vercelHandler(req, res) {
           text: logText
         });
       }
-    });
+    }
 
     // Gabungkan log baru dengan log lama dan batasi hanya 50 baris log teratas
     db.logs = [...newLogs, ...db.logs].slice(0, 50);
@@ -772,6 +795,185 @@ async function vercelHandler(req, res) {
       success: false,
       error: err.message
     });
+  }
+}
+
+// ========================================================
+// ELLIOTT WAVE THEORY ANALYSIS MODULE
+// ========================================================
+function analyzeElliottWave(candles, currentIndex) {
+  const startIdx = Math.max(0, currentIndex - 40);
+  const slice = candles.slice(startIdx, currentIndex + 1);
+  if (slice.length < 15) return { wave: 'None', details: '', type: 'NEUTRAL', confluenceBonus: 0 };
+
+  const pivots = []; // { type: 'peak'|'trough', price: number, index: number }
+  const windowSize = 3;
+  for (let i = windowSize; i < slice.length - windowSize; i++) {
+    const currentClose = slice[i].close;
+    let isPeak = true;
+    let isTrough = true;
+    for (let w = -windowSize; w <= windowSize; w++) {
+      if (w === 0) continue;
+      if (slice[i + w].close > currentClose) isPeak = false;
+      if (slice[i + w].close < currentClose) isTrough = false;
+    }
+    if (isPeak) {
+      pivots.push({ type: 'peak', price: currentClose, index: startIdx + i });
+    } else if (isTrough) {
+      pivots.push({ type: 'trough', price: currentClose, index: startIdx + i });
+    }
+  }
+
+  if (pivots.length < 4) return { wave: 'None', details: '', type: 'NEUTRAL', confluenceBonus: 0 };
+
+  const troughs = pivots.filter(p => p.type === 'trough');
+  const peaks = pivots.filter(p => p.type === 'peak');
+
+  // 1. Bullish Wave 3 (Impulsive Rally)
+  if (troughs.length >= 2 && peaks.length >= 1) {
+    const t2 = troughs[troughs.length - 1]; // latest trough
+    const t1 = troughs[troughs.length - 2]; // previous trough
+    const p1 = peaks[peaks.length - 1]; // latest peak
+    
+    if (t1.index < p1.index && p1.index < t2.index) {
+      const currentPrice = candles[currentIndex].close;
+      if (t2.price > t1.price && currentPrice > p1.price) {
+        return {
+          wave: 'Gelombang 3 (Impulsif) Naik',
+          details: 'Gelombang 3 terkonfirmasi karena Wave 2 korektif tertahan di atas awal Wave 1 dan harga menembus puncak Wave 1.',
+          type: 'BULLISH',
+          confluenceBonus: 20
+        };
+      }
+    }
+  }
+
+  // 2. Bullish Wave 5 (Terminal Rally)
+  if (troughs.length >= 3 && peaks.length >= 2) {
+    const t3 = troughs[troughs.length - 1];
+    const t2 = troughs[troughs.length - 2];
+    const t1 = troughs[troughs.length - 3];
+    const p2 = peaks[peaks.length - 1];
+    const p1 = peaks[peaks.length - 2];
+
+    if (t1.index < p1.index && p1.index < t2.index && t2.index < p2.index && p2.index < t3.index) {
+      if (t2.price > t1.price && p2.price > p1.price && t3.price > p1.price) {
+        return {
+          wave: 'Gelombang 5 (Terminal) Naik',
+          details: 'Gelombang 5 naik terbentuk. Batas overlap Wave 4 di atas Wave 1 valid. Bersiap untuk potensi koreksi A-B-C.',
+          type: 'BULLISH',
+          confluenceBonus: 10
+        };
+      }
+    }
+  }
+
+  // 3. Bearish Wave 3 (Impulsive Drop)
+  if (peaks.length >= 2 && troughs.length >= 1) {
+    const p2 = peaks[peaks.length - 1];
+    const p1 = peaks[peaks.length - 2];
+    const t1 = troughs[troughs.length - 1];
+
+    if (p1.index < t1.index && t1.index < p2.index) {
+      const currentPrice = candles[currentIndex].close;
+      if (p2.price < p1.price && currentPrice < t1.price) {
+        return {
+          wave: 'Gelombang 3 (Impulsif) Turun',
+          details: 'Gelombang 3 turun terkonfirmasi karena pantulan Wave 2 tertahan di bawah awal Wave 1 dan harga memecah dasar Wave 1.',
+          type: 'BEARISH',
+          confluenceBonus: 20
+        };
+      }
+    }
+  }
+
+  // 4. Bearish Wave 5 (Terminal Drop)
+  if (peaks.length >= 3 && troughs.length >= 2) {
+    const p3 = peaks[peaks.length - 1];
+    const p2 = peaks[peaks.length - 2];
+    const p1 = peaks[peaks.length - 3];
+    const t2 = troughs[troughs.length - 1];
+    const t1 = troughs[troughs.length - 2];
+
+    if (p1.index < t1.index && t1.index < p2.index && p2.index < t2.index && t2.index < p3.index) {
+      if (p2.price < p1.price && t2.price < t1.price && p3.price < t1.price) {
+        return {
+          wave: 'Gelombang 5 (Terminal) Turun',
+          details: 'Gelombang 5 turun terbentuk. Aturan no-overlap Wave 4 di bawah Wave 1 valid. Risiko pembalikan arah naik.',
+          type: 'BEARISH',
+          confluenceBonus: 10
+        };
+      }
+    }
+  }
+
+  // 5. Corrective Wave A-B-C
+  if (peaks.length >= 2 && troughs.length >= 2) {
+    const p2 = peaks[peaks.length - 1];
+    const p1 = peaks[peaks.length - 2];
+    const t2 = troughs[troughs.length - 1];
+    const t1 = troughs[troughs.length - 2];
+
+    if (p1.price > p2.price && t1.price > t2.price && p1.index < t1.index && t1.index < p2.index && p2.index < t2.index) {
+      return {
+        wave: 'Fase Koreksi A-B-C Berjalan',
+        details: 'Struktur korektif ABC terdeteksi pasca tren bullish. Wave C memecah dasar Wave A menunjukkan tekanan jual.',
+        type: 'BEARISH',
+        confluenceBonus: 15
+      };
+    }
+  }
+
+  return { wave: 'None', details: '', type: 'NEUTRAL', confluenceBonus: 0 };
+}
+
+async function getCurrentElliottWave(symbol) {
+  const TICKER_MAP = {
+    'EURUSD': 'EURUSD=X',
+    'GBPUSD': 'GBPUSD=X',
+    'USDJPY': 'USDJPY=X',
+    'XAUUSD': 'GC=F',
+    'BBRI': 'BBRI.JK',
+    'TLKM': 'TLKM.JK',
+    'AAPL': 'AAPL',
+    'TSLA': 'TSLA'
+  };
+  const ticker = TICKER_MAP[symbol] || 'EURUSD=X';
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=15m&range=5d`;
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      }
+    });
+    if (!response.ok) return { wave: 'None', details: '', type: 'NEUTRAL', confluenceBonus: 0 };
+    const data = await response.json();
+    if (!data.chart || !data.chart.result || !data.chart.result[0]) return { wave: 'None', details: '', type: 'NEUTRAL', confluenceBonus: 0 };
+    
+    const result = data.chart.result[0];
+    const quote = result.indicators.quote[0];
+    const timestamps = result.timestamp;
+    if (!timestamps || timestamps.length === 0) return { wave: 'None', details: '', type: 'NEUTRAL', confluenceBonus: 0 };
+
+    const candles = [];
+    for (let i = 0; i < timestamps.length; i++) {
+      if (quote.open && quote.open[i] && quote.high && quote.high[i] && quote.low && quote.low[i] && quote.close && quote.close[i]) {
+        candles.push({
+          time: timestamps[i] * 1000,
+          open: quote.open[i],
+          high: quote.high[i],
+          low: quote.low[i],
+          close: quote.close[i]
+        });
+      }
+    }
+
+    if (candles.length < 15) return { wave: 'None', details: '', type: 'NEUTRAL', confluenceBonus: 0 };
+    return analyzeElliottWave(candles, candles.length - 1);
+  } catch (err) {
+    console.warn(`Gagal menganalisis Elliott Wave untuk ${symbol}:`, err.message);
+    return { wave: 'None', details: '', type: 'NEUTRAL', confluenceBonus: 0 };
   }
 }
 
@@ -955,10 +1157,19 @@ async function runRealBacktest(symbol, period, minProbability, riskRewardRatio) 
       let prob = 35;
       let confluences = [];
 
+      const ew = analyzeElliottWave(candles, i);
       const isBullishSweep = candle.low < support && candle.close > support;
       const isBearishSweep = candle.high > resistance && candle.close < resistance;
 
       if (isTrendBullish) {
+        if (ew.wave !== 'None') {
+          if (ew.type === 'BULLISH') {
+            prob += ew.confluenceBonus;
+            confluences.push(`Elliott Wave ${ew.wave}`);
+          } else if (ew.type === 'BEARISH') {
+            prob -= 10;
+          }
+        }
         if (isBullishSweep) { prob += 15; confluences.push('SMC Liquidity Sweep'); }
         if (candle.close > candles[i-1].high) { prob += 10; confluences.push('SMC CHoCH'); }
         if (candle.low <= support * 1.0005) { prob += 15; confluences.push('S&R Support'); }
@@ -980,6 +1191,14 @@ async function runRealBacktest(symbol, period, minProbability, riskRewardRatio) 
           };
         }
       } else if (isTrendBearish) {
+        if (ew.wave !== 'None') {
+          if (ew.type === 'BEARISH') {
+            prob += ew.confluenceBonus;
+            confluences.push(`Elliott Wave ${ew.wave}`);
+          } else if (ew.type === 'BULLISH') {
+            prob -= 10;
+          }
+        }
         if (isBearishSweep) { prob += 15; confluences.push('SMC Liquidity Sweep'); }
         if (candle.close < candles[i-1].low) { prob += 10; confluences.push('SMC CHoCH'); }
         if (candle.high >= resistance * 0.9995) { prob += 15; confluences.push('S&R Resistance'); }

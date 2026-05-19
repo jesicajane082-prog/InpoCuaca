@@ -1,7 +1,7 @@
 {
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/$1" },
-    { "source": "/((?!api|src|node_modules|@react-refresh|@vite|favicon.svg|assets).*)", "destination": "/index.html" }
+    { "source": "/((?!api|src|node_modules|@react-refresh|@vite|favicon.svg|assets|trading-db.json).*)", "destination": "/index.html" }
   ],
   "crons": [
     {
