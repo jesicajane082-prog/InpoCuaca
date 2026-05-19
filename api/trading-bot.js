@@ -446,6 +446,7 @@ async function vercelHandler(req, res) {
 
         // Crossover check (SL/TP) & Break-Even exit detection
         let isBreakEvenExit = false;
+        let isTsExit = false;
         if (trade.type === 'BUY') {
           if (currentPrice >= tpNum) {
             shouldClose = true;
@@ -453,9 +454,8 @@ async function vercelHandler(req, res) {
           } else if (currentPrice <= slNum) {
             shouldClose = true;
             isWin = false;
-            if (trade.sl === trade.entry) {
-              isBreakEvenExit = true;
-            }
+            if (trade.isTS) isTsExit = true;
+            else if (trade.isBE) isBreakEvenExit = true;
           }
         } else { // SELL
           if (currentPrice <= tpNum) {
@@ -464,39 +464,62 @@ async function vercelHandler(req, res) {
           } else if (currentPrice >= slNum) {
             shouldClose = true;
             isWin = false;
-            if (trade.sl === trade.entry) {
-              isBreakEvenExit = true;
-            }
+            if (trade.isTS) isTsExit = true;
+            else if (trade.isBE) isBreakEvenExit = true;
           }
         }
 
-        // Break Even (BE) Logic:
-        // Jika harga sudah bergerak searah sejauh 50% dari target TP,
-        // pindahkan Stop Loss (SL) ke harga Entry (BE) untuk mengamankan posisi.
-        if (!shouldClose && trade.sl !== trade.entry) {
-          let isBeTriggered = false;
+        // Break Even (BE) & Trailing Stop (TS) Logic:
+        if (!shouldClose) {
+          const decs = trade.symbol.includes('JPY') ? 2 : trade.symbol.includes('BBRI') || trade.symbol.includes('TLKM') ? 0 : 5;
           if (trade.type === 'BUY') {
             const tpDist = tpNum - entryNum;
-            const halfway = entryNum + tpDist * 0.5;
-            if (currentPrice >= halfway) {
+            const beTarget = entryNum + tpDist * 0.5;
+            const tsTarget = entryNum + tpDist * 0.75;
+            const tsStopLevel = entryNum + tpDist * 0.217; // +0.5R if RRR is 2.3
+
+            if (currentPrice >= tsTarget && !trade.isTS) {
+              trade.sl = tsStopLevel.toFixed(decs);
+              trade.isTS = true;
+              trade.isBE = true;
+              newLogs.push({
+                id: timestamp + Math.random(),
+                time: timeStr,
+                text: `[MANAGEMEN RISIKO] Posisi ${trade.symbol} (${trade.type}) melampaui 75% target TP. Stop Loss digeser menjadi Trailing Stop (+0.5R).`
+              });
+            } else if (currentPrice >= beTarget && !trade.isBE && !trade.isTS) {
               trade.sl = trade.entry;
-              isBeTriggered = true;
+              trade.isBE = true;
+              newLogs.push({
+                id: timestamp + Math.random(),
+                time: timeStr,
+                text: `[MANAGEMEN RISIKO] Posisi ${trade.symbol} (${trade.type}) mencapai 50% target TP. SL dipindahkan ke Entry (BE).`
+              });
             }
           } else { // SELL
             const tpDist = entryNum - tpNum;
-            const halfway = entryNum - tpDist * 0.5;
-            if (currentPrice <= halfway) {
-              trade.sl = trade.entry;
-              isBeTriggered = true;
-            }
-          }
+            const beTarget = entryNum - tpDist * 0.5;
+            const tsTarget = entryNum - tpDist * 0.75;
+            const tsStopLevel = entryNum - tpDist * 0.217;
 
-          if (isBeTriggered) {
-            newLogs.push({
-              id: timestamp + Math.random(),
-              time: timeStr,
-              text: `[MANAGEMEN RISIKO] Posisi ${trade.symbol} (${trade.type}) telah mencapai 50% target TP. Stop Loss otomatis dipindahkan ke harga Entry (${trade.entry}) untuk mengamankan Break-Even (BE).`
-            });
+            if (currentPrice <= tsTarget && !trade.isTS) {
+              trade.sl = tsStopLevel.toFixed(decs);
+              trade.isTS = true;
+              trade.isBE = true;
+              newLogs.push({
+                id: timestamp + Math.random(),
+                time: timeStr,
+                text: `[MANAGEMEN RISIKO] Posisi ${trade.symbol} (${trade.type}) melampaui 75% target TP. Stop Loss digeser menjadi Trailing Stop (+0.5R).`
+              });
+            } else if (currentPrice <= beTarget && !trade.isBE && !trade.isTS) {
+              trade.sl = trade.entry;
+              trade.isBE = true;
+              newLogs.push({
+                id: timestamp + Math.random(),
+                time: timeStr,
+                text: `[MANAGEMEN RISIKO] Posisi ${trade.symbol} (${trade.type}) mencapai 50% target TP. SL dipindahkan ke Entry (BE).`
+              });
+            }
           }
         }
 
@@ -510,7 +533,13 @@ async function vercelHandler(req, res) {
 
           let pnlChange = 0;
           trade.closePrice = currentPrice.toFixed(trade.entry.includes('.') ? trade.entry.split('.')[1].length : 2);
-          if (isBreakEvenExit) {
+          if (isTsExit) {
+            trade.pnl = `TRAILING STOP (+${(0.5 * riskMultiplier).toFixed(2)}% / +${Math.round(tpPips * 0.5)} Pips)`;
+            trade.status = 'closed';
+            trade.time = `Selesai (Trailing Stop)`;
+            pnlChange = 0.5 * riskMultiplier;
+            closeReason = 'Trailing Stop';
+          } else if (isBreakEvenExit) {
             trade.pnl = `BREAK EVEN (+0.00% / 0 Pips)`;
             trade.status = 'closed';
             trade.time = `Selesai (Break Even)`;
@@ -559,6 +588,19 @@ async function vercelHandler(req, res) {
     const minProbability = db.settings?.minProbability || 70;
     const riskRewardRatio = db.settings?.riskRewardRatio || 2.3;
 
+    // Fetch real historical data in parallel
+    const historicalDataMap = {};
+    const fetchPromises = activeSymbols.map(async (sym) => {
+      try {
+        const candles = await fetchRecentCandles(sym);
+        historicalDataMap[sym] = candles;
+      } catch (err) {
+        console.error(`Fetch failed for ${sym}:`, err);
+        historicalDataMap[sym] = [];
+      }
+    });
+    await Promise.all(fetchPromises);
+
     for (let index = 0; index < symbols.length; index++) {
       const sym = symbols[index];
       if (!activeSymbols.includes(sym)) continue;
@@ -567,43 +609,47 @@ async function vercelHandler(req, res) {
       const hasActive = db.trades.some(t => t.symbol === sym && t.status === 'active');
       if (hasActive) continue;
 
+      const candles = historicalDataMap[sym] || [];
+      if (candles.length < 800) continue; // Butuh minimal 800 candle untuk SMA 800
+
       const currentLive = livePrices[sym];
-      const symbolSeed = sym.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+      const i = candles.length - 1;
+      const candle = candles[i];
+      candle.close = currentLive; // Sinkronkan candle terakhir dengan harga live detik ini
 
       // Kurangi waktu secara berurutan agar log aset terdistribusi secara natural (drift 4 detik per aset)
       const itemTimestamp = timestamp - (index * 4000);
       const itemTimeStr = new Date(itemTimestamp).toLocaleString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB';
 
-      // A. HIGH TIMEFRAME (H1) - STRUKTUR TREN MACRO
-      const h1Wave = Math.sin(itemTimestamp / (3600 * 1000) + symbolSeed);
-      const h1Trend = h1Wave > 0.20 ? 'BULLISH' : h1Wave < -0.20 ? 'BEARISH' : 'SIDEWAYS';
+      // Time Killzone for Forex (07:00 - 17:00 UTC)
+      const candleHourUTC = new Date(itemTimestamp).getUTCHours();
+      const isForex = sym.includes('USD') || sym.includes('JPY');
+      const isKillzone = isForex ? (candleHourUTC >= 7 && candleHourUTC <= 17) : true;
+      if (!isKillzone) continue; // Skip hunting outside active hours
 
-      // B. PILAR 1: SMART MONEY CONCEPTS (SMC) EMULATION
-      // 1. Liquidity Sweep (Sapu likuiditas swing ritel)
-      const sweepWave = Math.sin(itemTimestamp / (45 * 60 * 1000) + symbolSeed + 1);
-      const liqSweep = sweepWave > 0.65 ? 'BULLISH_SWEEP' : sweepWave < -0.65 ? 'BEARISH_SWEEP' : 'NONE';
+      // A. HIGH TIMEFRAME (H1) - STRUKTUR TREN MACRO MENGGUNAKAN SMA 800
+      let sma800Sum = 0;
+      for (let j = i - 800 + 1; j <= i; j++) {
+        sma800Sum += candles[j].close;
+      }
+      const sma800 = sma800Sum / 800;
 
-      // 2. Change of Character (CHoCH M15 - Peralihan struktur awal)
-      const chochWave = Math.sin(itemTimestamp / (30 * 60 * 1000) + symbolSeed + 2);
-      const hasCHoCH = chochWave > 0.35;
+      const isTrendBullish = candle.close > sma800;
+      const isTrendBearish = candle.close < sma800;
+      const h1Trend = isTrendBullish ? 'BULLISH' : isTrendBearish ? 'BEARISH' : 'SIDEWAYS';
 
-      // 3. Mitigasi Order Block (OB M15 - Harga masuk ke demand/supply institusi)
-      const obWave = Math.sin(itemTimestamp / (15 * 60 * 1000) + symbolSeed + 3);
-      const priceInOrderBlock = obWave > 0.40;
+      // B. PILAR 1: SMART MONEY CONCEPTS (SMC) & SUPPORT RESISTANCE (S&R)
+      let support = candles[i-1].low;
+      let resistance = candles[i-1].high;
+      for (let j = i - 30; j < i; j++) {
+        if (candles[j].low < support) support = candles[j].low;
+        if (candles[j].high > resistance) resistance = candles[j].high;
+      }
 
-      // 4. Imbalance / Fair Value Gap (FVG M15)
-      const fvgWave = Math.sin(itemTimestamp / (10 * 60 * 1000) + symbolSeed + 4);
-      const fvgMitigated = fvgWave > 0.25;
+      const isBullishSweep = candle.low < support && candle.close > support;
+      const isBearishSweep = candle.high > resistance && candle.close < resistance;
 
-      // C. PILAR 2: SUPPLY & DEMAND (S&D) ZONES
-      const sdWave = Math.sin(itemTimestamp / (20 * 60 * 1000) + symbolSeed + 5);
-      const inDemandZone = sdWave > 0.45;  // Drop-Base-Rally Demand Zone
-      const inSupplyZone = sdWave < -0.45; // Rally-Base-Drop Supply Zone
-
-      // D. PILAR 3: HORIZONTAL SUPPORT & RESISTANCE (S&R) KEY LEVELS
-      const srWave = Math.sin(itemTimestamp / (12 * 60 * 1000) + symbolSeed + 6);
-      const atMajorSupport = srWave > 0.50;      // Klasik Support Level / RBS (Resistance Become Support)
-      const atMajorResistance = srWave < -0.50;  // Klasik Resistance Level / SBR (Support Become Resistance)
+      const ew = analyzeElliottWave(candles, i);
 
       // E. KELAYAKAN & KONFLUENSI PROBABILITAS GABUNGAN
       let probability = 35; // Baseline disiplin (hanya entri pada setup berkualitas tinggi)
@@ -612,11 +658,9 @@ async function vercelHandler(req, res) {
       let tradeType = '';
       let confluences = [];
 
-      if (h1Trend === 'BULLISH') {
+      if (isTrendBullish) {
         bias = 'BUY ONLY (Tren H1 Bullish)';
         
-        // 0. Konfluensi Elliott Wave
-        const ew = await getCurrentElliottWave(sym);
         if (ew.wave !== 'None') {
           if (ew.type === 'BULLISH') {
             probability += ew.confluenceBonus;
@@ -626,50 +670,15 @@ async function vercelHandler(req, res) {
           }
         }
 
-        // 1. Konfluensi SMC
-        if (liqSweep === 'BULLISH_SWEEP') {
-          probability += 10;
-          confluences.push('SMC Liquidity Sweep');
-        }
-        if (hasCHoCH) {
-          probability += 10;
-          confluences.push('SMC M15 CHoCH');
-        }
-        if (priceInOrderBlock) {
-          probability += 10;
-          confluences.push('SMC Tapped Order Block (OB)');
-        }
-        if (fvgMitigated) {
-          probability += 10;
-          confluences.push('SMC FVG Fill');
-        }
-
-        // 2. Konfluensi Supply & Demand
-        if (inDemandZone) {
-          probability += 15;
-          confluences.push('S&D Demand Zone');
-        }
-
-        // 3. Konfluensi Support & Resistance Klasik
-        if (atMajorSupport) {
-          probability += 10;
-          confluences.push('S&R Key Support (RBS)');
-        }
-
-        // 4. Momentum Filter (RSI)
-        const m15Rsi = Math.round(50 + Math.sin(itemTimestamp / (15 * 60 * 1000) + symbolSeed + 7) * 20);
-        if (m15Rsi < 45) {
-          probability += 5;
-          confluences.push('RSI Pullback');
-        }
+        if (isBullishSweep) { probability += 15; confluences.push('SMC Liquidity Sweep'); }
+        if (candle.close > candles[i-1].high) { probability += 10; confluences.push('SMC CHoCH'); }
+        if (candle.low <= support * 1.0005) { probability += 15; confluences.push('S&R Support'); }
 
         tradeType = 'BUY';
         executeTrade = probability >= minProbability;
-      } else if (h1Trend === 'BEARISH') {
+      } else if (isTrendBearish) {
         bias = 'SELL ONLY (Tren H1 Bearish)';
 
-        // 0. Konfluensi Elliott Wave
-        const ew = await getCurrentElliottWave(sym);
         if (ew.wave !== 'None') {
           if (ew.type === 'BEARISH') {
             probability += ew.confluenceBonus;
@@ -679,42 +688,9 @@ async function vercelHandler(req, res) {
           }
         }
 
-        // 1. Konfluensi SMC
-        if (liqSweep === 'BEARISH_SWEEP') {
-          probability += 10;
-          confluences.push('SMC Liquidity Sweep');
-        }
-        if (hasCHoCH) {
-          probability += 10;
-          confluences.push('SMC M15 CHoCH');
-        }
-        if (priceInOrderBlock) {
-          probability += 10;
-          confluences.push('SMC Tapped Order Block (OB)');
-        }
-        if (fvgMitigated) {
-          probability += 10;
-          confluences.push('SMC FVG Fill');
-        }
-
-        // 2. Konfluensi Supply & Demand
-        if (inSupplyZone) {
-          probability += 15;
-          confluences.push('S&D Supply Zone');
-        }
-
-        // 3. Konfluensi Support & Resistance Klasik
-        if (atMajorResistance) {
-          probability += 10;
-          confluences.push('S&R Key Resistance (SBR)');
-        }
-
-        // 4. Momentum Filter (RSI)
-        const m15Rsi = Math.round(50 + Math.sin(itemTimestamp / (15 * 60 * 1000) + symbolSeed + 7) * 20);
-        if (m15Rsi > 55) {
-          probability += 5;
-          confluences.push('RSI Rally');
-        }
+        if (isBearishSweep) { probability += 15; confluences.push('SMC Liquidity Sweep'); }
+        if (candle.close < candles[i-1].low) { probability += 10; confluences.push('SMC CHoCH'); }
+        if (candle.high >= resistance * 0.9995) { probability += 15; confluences.push('S&R Resistance'); }
 
         tradeType = 'SELL';
         executeTrade = probability >= minProbability;
@@ -730,18 +706,24 @@ async function vercelHandler(req, res) {
       if (executeTrade) {
         // Stop Loss ketat memanfaatkan level S&D / S&R terdekat demi RRR maksimum
         const distMap = {
-          'EURUSD': 0.00100, 'GBPUSD': 0.00150, 'USDJPY': 0.20, 'XAUUSD': 6.00,
-          'AAPL': 1.50, 'TSLA': 2.50, 'BBRI': 40, 'TLKM': 20
+          'EURUSD': 0.0012, 'GBPUSD': 0.0018, 'USDJPY': 0.25, 'XAUUSD': 7.0,
+          'AAPL': 2.0, 'TSLA': 3.5, 'BBRI': 50, 'TLKM': 30
+        };
+        const spreadMap = {
+          'EURUSD': 0.00010, 'GBPUSD': 0.00015, 'USDJPY': 0.015, 'XAUUSD': 0.30,
+          'AAPL': 0.05, 'TSLA': 0.10, 'BBRI': 2, 'TLKM': 1
         };
         const slDist = distMap[sym] || 0.01;
+        const spread = spreadMap[sym] || 0.0001;
         const rrrValStr = `1:${riskRewardRatio}`;
         
         const pipDivisor = sym.includes('JPY') ? 0.01 : sym.includes('BBRI') || sym.includes('TLKM') ? 1 : 0.0001;
         const slPips = Math.round(slDist / pipDivisor);
         const tpPips = Math.round(slPips * riskRewardRatio);
 
-        const newSl = tradeType === 'BUY' ? (currentLive - slDist) : (currentLive + slDist);
-        const newTp = tradeType === 'BUY' ? (currentLive + slDist * riskRewardRatio) : (currentLive - slDist * riskRewardRatio);
+        const entryPrice = tradeType === 'BUY' ? (currentLive + spread) : (currentLive - spread);
+        const newSl = tradeType === 'BUY' ? (entryPrice - slDist) : (entryPrice + slDist);
+        const newTp = tradeType === 'BUY' ? (entryPrice + slDist * riskRewardRatio) : (entryPrice - slDist * riskRewardRatio);
 
         const decs = sym.includes('JPY') ? 2 : sym.includes('BBRI') || sym.includes('TLKM') ? 0 : 5;
 
@@ -749,7 +731,7 @@ async function vercelHandler(req, res) {
           id: itemTimestamp + Math.random(),
           symbol: sym,
           type: tradeType,
-          entry: currentLive.toFixed(decs),
+          entry: entryPrice.toFixed(decs),
           sl: `${newSl.toFixed(decs)} (-${slPips} Pips)`,
           tp: `${newTp.toFixed(decs)} (+${tpPips} Pips)`,
           timeframe: 'M5 (Confluence Set)',
@@ -757,7 +739,9 @@ async function vercelHandler(req, res) {
           probability: `${probability}%`,
           pnl: 'RUNNING (+0.00%)',
           status: 'active',
-          time: 'Aktif'
+          time: 'Aktif',
+          isBE: false,
+          isTS: false
         };
 
         db.trades.unshift(newTrade);
@@ -767,7 +751,7 @@ async function vercelHandler(req, res) {
         newLogs.push({
           id: itemTimestamp + Math.random(),
           time: itemTimeStr,
-          text: `[KONFLUENS EKSEKUSI] Sinyal berkualitas tinggi terdeteksi untuk ${sym}! Tren H1: ${h1Trend}, Konfluensi Aktif: [${confluences.join(' + ')}]. Probabilitas: ${probability}%. Posisi ${tradeType} dibuka di harga ${currentLive.toFixed(decs)}.`
+          text: `[KONFLUENS EKSEKUSI] Sinyal berkualitas tinggi terdeteksi untuk ${sym}! Tren H1: ${h1Trend}, Konfluensi Aktif: [${confluences.join(' + ')}]. Probabilitas: ${probability}%. Posisi ${tradeType} dibuka di harga ${entryPrice.toFixed(decs)} (Termasuk Spread).`
         });
       } else {
         // Log alasan melewatkan peluang (Disiplin Trader)
@@ -936,7 +920,7 @@ function analyzeElliottWave(candles, currentIndex) {
   return { wave: 'None', details: '', type: 'NEUTRAL', confluenceBonus: 0 };
 }
 
-async function getCurrentElliottWave(symbol) {
+async function fetchRecentCandles(symbol) {
   const TICKER_MAP = {
     'EURUSD': 'EURUSD=X',
     'GBPUSD': 'GBPUSD=X',
@@ -948,7 +932,7 @@ async function getCurrentElliottWave(symbol) {
     'TSLA': 'TSLA'
   };
   const ticker = TICKER_MAP[symbol] || 'EURUSD=X';
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=15m&range=5d`;
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=15m&range=14d`;
 
   try {
     const response = await fetch(url, {
@@ -956,14 +940,14 @@ async function getCurrentElliottWave(symbol) {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
       }
     });
-    if (!response.ok) return { wave: 'None', details: '', type: 'NEUTRAL', confluenceBonus: 0 };
+    if (!response.ok) return [];
     const data = await response.json();
-    if (!data.chart || !data.chart.result || !data.chart.result[0]) return { wave: 'None', details: '', type: 'NEUTRAL', confluenceBonus: 0 };
+    if (!data.chart || !data.chart.result || !data.chart.result[0]) return [];
     
     const result = data.chart.result[0];
     const quote = result.indicators.quote[0];
     const timestamps = result.timestamp;
-    if (!timestamps || timestamps.length === 0) return { wave: 'None', details: '', type: 'NEUTRAL', confluenceBonus: 0 };
+    if (!timestamps || timestamps.length === 0) return [];
 
     const candles = [];
     for (let i = 0; i < timestamps.length; i++) {
@@ -977,12 +961,10 @@ async function getCurrentElliottWave(symbol) {
         });
       }
     }
-
-    if (candles.length < 15) return { wave: 'None', details: '', type: 'NEUTRAL', confluenceBonus: 0 };
-    return analyzeElliottWave(candles, candles.length - 1);
+    return candles;
   } catch (err) {
-    console.warn(`Gagal menganalisis Elliott Wave untuk ${symbol}:`, err.message);
-    return { wave: 'None', details: '', type: 'NEUTRAL', confluenceBonus: 0 };
+    console.warn(`Gagal menarik data untuk ${symbol}:`, err.message);
+    return [];
   }
 }
 
