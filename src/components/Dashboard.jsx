@@ -2688,12 +2688,12 @@ INSTRUKSI PENTING:
                     </div>
                   </div>
                   <div className="overflow-x-auto">
-                    <table className="w-full text-xs text-left min-w-[500px]">
+                    <table className="w-full text-xs text-left min-w-[800px]">
                       <thead>
-                        <tr className="text-[10px] font-bold text-slate-400 border-b border-slate-50 uppercase tracking-wider bg-slate-50/20">
+                        <tr className="text-[10px] font-bold text-slate-400 border-b border-slate-50 uppercase tracking-wider bg-slate-50/20 whitespace-nowrap">
                           <th className="px-6 py-3">Waktu</th>
                           <th className="px-4 py-3">Aksi</th>
-                          <th className="px-4 py-3">Harga Entry</th>
+                          <th className="px-4 py-3">Harga Entry & Exit</th>
                           <th className="px-4 py-3">Risk-Reward</th>
                           <th className="px-4 py-3 text-right pr-6">Hasil PnL</th>
                         </tr>
