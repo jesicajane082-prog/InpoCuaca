@@ -1006,13 +1006,16 @@ INSTRUKSI PENTING:
         } catch (err) {}
       }
 
-      if (generalLogs.length === 0) {
-        setGeneralLogs([
-          { id: 1, time: new Date().toLocaleTimeString('id-ID') + ' WIB', text: '[SISTEM] Mode Emulator Lokal aktif. Silakan klik "⚡ Pemicu Manual Bot" untuk simulasi scan.' }
-        ]);
-      }
+      setGeneralLogs(prev => {
+        if (prev.length === 0) {
+          return [
+            { id: 1, time: new Date().toLocaleTimeString('id-ID') + ' WIB', text: '[SISTEM] Mode Emulator Lokal aktif. Silakan klik "⚡ Pemicu Manual Bot" untuk simulasi scan.' }
+          ];
+        }
+        return prev;
+      });
     }
-  }, [generalLogs.length, performanceData]);
+  }, []);
 
   const triggerManualBotScan = async () => {
     setIsTriggering(true);
