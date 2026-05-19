@@ -504,10 +504,14 @@ async function vercelHandler(req, res) {
           const rrrParts = trade.rrr.split(':').map(Number);
           const riskMultiplier = rrrParts[1] || 2.0;
           
+          const pipDivisor = trade.symbol.includes('JPY') ? 0.01 : trade.symbol.includes('BBRI') || trade.symbol.includes('TLKM') ? 1 : 0.0001;
+          const tpPips = Math.round(Math.abs(tpNum - entryNum) / pipDivisor);
+          const slPips = Math.round(tpPips / riskMultiplier);
+
           let pnlChange = 0;
           trade.closePrice = currentPrice.toFixed(trade.entry.includes('.') ? trade.entry.split('.')[1].length : 2);
           if (isBreakEvenExit) {
-            trade.pnl = `BREAK EVEN (+0.00%)`;
+            trade.pnl = `BREAK EVEN (+0.00% / 0 Pips)`;
             trade.status = 'closed';
             trade.time = `Selesai (Break Even)`;
             pnlChange = 0;
@@ -515,8 +519,8 @@ async function vercelHandler(req, res) {
           } else {
             pnlChange = isWin ? (0.20 * riskMultiplier) : -0.20;
             trade.pnl = isWin 
-              ? `PROFIT (+${(0.20 * riskMultiplier).toFixed(2)}%)` 
-              : `LOSS (-${(0.20).toFixed(2)}%)`;
+              ? `PROFIT (+${(0.20 * riskMultiplier).toFixed(2)}% / +${tpPips} Pips)` 
+              : `LOSS (-${(0.20).toFixed(2)}% / -${slPips} Pips)`;
             trade.status = 'closed';
             trade.time = `Selesai (${closeReason})`;
           }
@@ -731,6 +735,10 @@ async function vercelHandler(req, res) {
         };
         const slDist = distMap[sym] || 0.01;
         const rrrValStr = `1:${riskRewardRatio}`;
+        
+        const pipDivisor = sym.includes('JPY') ? 0.01 : sym.includes('BBRI') || sym.includes('TLKM') ? 1 : 0.0001;
+        const slPips = Math.round(slDist / pipDivisor);
+        const tpPips = Math.round(slPips * riskRewardRatio);
 
         const newSl = tradeType === 'BUY' ? (currentLive - slDist) : (currentLive + slDist);
         const newTp = tradeType === 'BUY' ? (currentLive + slDist * riskRewardRatio) : (currentLive - slDist * riskRewardRatio);
@@ -742,8 +750,8 @@ async function vercelHandler(req, res) {
           symbol: sym,
           type: tradeType,
           entry: currentLive.toFixed(decs),
-          sl: newSl.toFixed(decs),
-          tp: newTp.toFixed(decs),
+          sl: `${newSl.toFixed(decs)} (-${slPips} Pips)`,
+          tp: `${newTp.toFixed(decs)} (+${tpPips} Pips)`,
           timeframe: 'M5 (Confluence Set)',
           rrr: rrrValStr,
           probability: `${probability}%`,
@@ -1074,6 +1082,9 @@ async function runRealBacktest(symbol, period, minProbability, riskRewardRatio) 
   const spread = spreadMap[symbol] || 0.0001;
   const commissionPercentage = 0.0002; // 0.02% per trade
   const decs = symbol.includes('JPY') ? 2 : symbol.includes('BBRI') || symbol.includes('TLKM') ? 0 : 5;
+  const pipDivisor = symbol.includes('JPY') ? 0.01 : symbol.includes('BBRI') || symbol.includes('TLKM') ? 1 : 0.0001;
+  const slPips = Math.round(slDist / pipDivisor);
+  const tpPips = Math.round(slPips * riskRewardRatio);
 
   let balance = 10000.0;
   const initialBalance = 10000.0;
@@ -1175,9 +1186,10 @@ async function runRealBacktest(symbol, period, minProbability, riskRewardRatio) 
         activeTrade.closePrice = (outcome === 'PROFIT' ? tp : outcome === 'TRAILING STOP' ? sl : outcome === 'BREAK EVEN' ? entry : sl).toFixed(decs);
         activeTrade.closeTime = timeStr;
         activeTrade.pnl = outcome === 'PROFIT' 
-          ? `PROFIT (+${(riskRewardRatio * 1.0).toFixed(1)}%)` 
-          : outcome === 'TRAILING STOP' ? `TRAILING STOP (+${(0.5 * riskRewardRatio).toFixed(1)}%)`
-          : outcome === 'BREAK EVEN' ? 'BREAK EVEN (+0.00%)' : 'LOSS (-1.0%)';
+          ? `PROFIT (+${(riskRewardRatio * 1.0).toFixed(1)}% / +${tpPips} Pips)` 
+          : outcome === 'TRAILING STOP' ? `TRAILING STOP (+${(0.5 * riskRewardRatio).toFixed(1)}% / +${Math.round(tpPips * 0.5)} Pips)`
+          : outcome === 'BREAK EVEN' ? 'BREAK EVEN (+0.00% / 0 Pips)' 
+          : `LOSS (-1.0% / -${slPips} Pips)`;
 
         if (outcome === 'PROFIT') wins++;
         else if (outcome === 'LOSS') losses++;
@@ -1217,6 +1229,10 @@ async function runRealBacktest(symbol, period, minProbability, riskRewardRatio) 
       const isBullishSweep = candle.low < support && candle.close > support;
       const isBearishSweep = candle.high > resistance && candle.close < resistance;
 
+      const pipDivisor = symbol.includes('JPY') ? 0.01 : symbol.includes('BBRI') || symbol.includes('TLKM') ? 1 : 0.0001;
+      const slPips = Math.round(slDist / pipDivisor);
+      const tpPips = Math.round(slPips * riskRewardRatio);
+
       if (isTrendBullish) {
         if (ew.wave !== 'None') {
           if (ew.type === 'BULLISH') {
@@ -1236,8 +1252,8 @@ async function runRealBacktest(symbol, period, minProbability, riskRewardRatio) 
             symbol,
             type: 'BUY',
             entry: (candle.close + spread).toFixed(decs),
-            sl: (candle.close + spread - slDist).toFixed(decs),
-            tp: (candle.close + spread + slDist * riskRewardRatio).toFixed(decs),
+            sl: `${(candle.close + spread - slDist).toFixed(decs)} (-${slPips} Pips)`,
+            tp: `${(candle.close + spread + slDist * riskRewardRatio).toFixed(decs)} (+${tpPips} Pips)`,
             rrr: `1:${riskRewardRatio}`,
             probability: `${prob}%`,
             status: 'active',
@@ -1266,8 +1282,8 @@ async function runRealBacktest(symbol, period, minProbability, riskRewardRatio) 
             symbol,
             type: 'SELL',
             entry: (candle.close - spread).toFixed(decs),
-            sl: (candle.close - spread + slDist).toFixed(decs),
-            tp: (candle.close - spread - slDist * riskRewardRatio).toFixed(decs),
+            sl: `${(candle.close - spread + slDist).toFixed(decs)} (-${slPips} Pips)`,
+            tp: `${(candle.close - spread - slDist * riskRewardRatio).toFixed(decs)} (+${tpPips} Pips)`,
             rrr: `1:${riskRewardRatio}`,
             probability: `${prob}%`,
             status: 'active',
