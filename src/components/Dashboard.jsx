@@ -1059,6 +1059,7 @@ INSTRUKSI PENTING:
           let shouldClose = false;
           let isWin = false;
           let closeReason = 'Target Hit';
+          let isBreakEvenExit = false;
 
           if (trade.type === 'BUY') {
             if (currentPrice >= tpNum) {
@@ -1067,6 +1068,9 @@ INSTRUKSI PENTING:
             } else if (currentPrice <= slNum) {
               shouldClose = true;
               isWin = false;
+              if (trade.sl === trade.entry) {
+                isBreakEvenExit = true;
+              }
             }
           } else {
             if (currentPrice <= tpNum) {
@@ -1075,28 +1079,61 @@ INSTRUKSI PENTING:
             } else if (currentPrice >= slNum) {
               shouldClose = true;
               isWin = false;
+              if (trade.sl === trade.entry) {
+                isBreakEvenExit = true;
+              }
             }
           }
 
-          if (!shouldClose && Math.random() < 0.05) {
-            shouldClose = true;
-            const runningProfit = trade.type === 'BUY'
-              ? ((currentPrice - entryNum) / entryNum) * 100
-              : ((entryNum - currentPrice) / entryNum) * 100;
-            isWin = runningProfit >= 0;
-            closeReason = 'AI Trailing Stop';
+          // Break Even (BE) Logic:
+          // Jika harga sudah bergerak searah sejauh 50% dari target TP,
+          // pindahkan Stop Loss (SL) ke harga Entry (BE) untuk mengamankan posisi.
+          if (!shouldClose && trade.sl !== trade.entry) {
+            let isBeTriggered = false;
+            if (trade.type === 'BUY') {
+              const tpDist = tpNum - entryNum;
+              const halfway = entryNum + tpDist * 0.5;
+              if (currentPrice >= halfway) {
+                trade.sl = trade.entry;
+                isBeTriggered = true;
+              }
+            } else { // SELL
+              const tpDist = entryNum - tpNum;
+              const halfway = entryNum - tpDist * 0.5;
+              if (currentPrice <= halfway) {
+                trade.sl = trade.entry;
+                isBeTriggered = true;
+              }
+            }
+
+            if (isBeTriggered) {
+              newLogs.push({
+                id: timestamp + Math.random(),
+                time: timeStr,
+                text: `[MANAGEMEN RISIKO] Posisi ${trade.symbol} (${trade.type}) telah mencapai 50% target TP. Stop Loss otomatis dipindahkan ke harga Entry (${trade.entry}) untuk mengamankan Break-Even (BE).`
+              });
+            }
           }
 
           if (shouldClose) {
             const rrrParts = trade.rrr.split(':').map(Number);
             const riskMultiplier = rrrParts[1] || 2.0;
-            const pnlChange = isWin ? (0.20 * riskMultiplier) : -0.20;
             
-            trade.pnl = isWin 
-              ? `PROFIT (+${(0.20 * riskMultiplier).toFixed(2)}%)` 
-              : `LOSS (-${(0.20).toFixed(2)}%)`;
-            trade.status = 'closed';
-            trade.time = `Selesai (${closeReason})`;
+            let pnlChange = 0;
+            if (isBreakEvenExit) {
+              trade.pnl = `BREAK EVEN (+0.00%)`;
+              trade.status = 'closed';
+              trade.time = `Selesai (Break Even)`;
+              pnlChange = 0;
+              closeReason = 'Break Even';
+            } else {
+              pnlChange = isWin ? (0.20 * riskMultiplier) : -0.20;
+              trade.pnl = isWin 
+                ? `PROFIT (+${(0.20 * riskMultiplier).toFixed(2)}%)` 
+                : `LOSS (-${(0.20).toFixed(2)}%)`;
+              trade.status = 'closed';
+              trade.time = `Selesai (${closeReason})`;
+            }
 
             newLogs.push({
               id: timestamp + Math.random(),
