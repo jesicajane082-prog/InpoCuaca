@@ -2723,7 +2723,7 @@ INSTRUKSI PENTING:
                                   <p className="text-slate-800 font-extrabold text-sm leading-none mt-0.5">{log.entry}</p>
                                 </div>
                                 
-                                {log.status === 'active' && (
+                                {log.status === 'active' ? (
                                   <div className="flex flex-col bg-amber-50/70 border border-amber-100/60 rounded-xl px-2 py-1 inline-block">
                                     <span className="text-[9px] text-amber-600 font-bold uppercase tracking-wider">Harga Realtime</span>
                                     <p className="text-amber-600 font-extrabold text-xs animate-pulse leading-none mt-0.5">
@@ -2734,7 +2734,14 @@ INSTRUKSI PENTING:
                                       })()}
                                     </p>
                                   </div>
-                                )}
+                                ) : log.closePrice ? (
+                                  <div className="flex flex-col bg-slate-50 border border-slate-200/60 rounded-xl px-2 py-1 inline-block mt-1">
+                                    <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Harga Exit</span>
+                                    <p className="text-slate-700 font-extrabold text-xs leading-none mt-0.5">
+                                      {log.closePrice}
+                                    </p>
+                                  </div>
+                                ) : null}
 
                                 {log.sl && log.tp && (
                                   <p className="text-[9px] text-slate-400 font-semibold tracking-wider pt-0.5">

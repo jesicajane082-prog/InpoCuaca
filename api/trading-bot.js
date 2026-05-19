@@ -505,6 +505,7 @@ async function vercelHandler(req, res) {
           const riskMultiplier = rrrParts[1] || 2.0;
           
           let pnlChange = 0;
+          trade.closePrice = currentPrice.toFixed(trade.entry.includes('.') ? trade.entry.split('.')[1].length : 2);
           if (isBreakEvenExit) {
             trade.pnl = `BREAK EVEN (+0.00%)`;
             trade.status = 'closed';
@@ -1034,17 +1035,29 @@ async function runRealBacktest(symbol, period, minProbability, riskRewardRatio) 
     throw new Error('Data historis tidak mencukupi untuk melakukan backtesting.');
   }
 
-  // Calculate SMA 200 on 15m candles
+  // Calculate SMA 800 (H1 Proxy) and SMA 200 on 15m candles
   const smaPeriod = 200;
+  const sma800Period = 800;
   let smaSum = 0;
+  let sma800Sum = 0;
   const sma = [];
+  const sma800 = [];
   for (let i = 0; i < len; i++) {
     smaSum += candles[i].close;
+    sma800Sum += candles[i].close;
+    
     if (i >= smaPeriod - 1) {
       if (i > smaPeriod - 1) smaSum -= candles[i - smaPeriod].close;
       sma.push(smaSum / smaPeriod);
     } else {
-      sma.push(null);
+      sma.push(smaSum / (i + 1));
+    }
+
+    if (i >= sma800Period - 1) {
+      if (i > sma800Period - 1) sma800Sum -= candles[i - sma800Period].close;
+      sma800.push(sma800Sum / sma800Period);
+    } else {
+      sma800.push(sma800Sum / (i + 1));
     }
   }
 
@@ -1054,6 +1067,12 @@ async function runRealBacktest(symbol, period, minProbability, riskRewardRatio) 
     'AAPL': 2.0, 'TSLA': 3.5, 'BBRI': 50, 'TLKM': 30
   };
   const slDist = distMap[symbol] || 0.01;
+  const spreadMap = {
+    'EURUSD': 0.00010, 'GBPUSD': 0.00015, 'USDJPY': 0.015, 'XAUUSD': 0.30,
+    'AAPL': 0.05, 'TSLA': 0.10, 'BBRI': 2, 'TLKM': 1
+  };
+  const spread = spreadMap[symbol] || 0.0001;
+  const commissionPercentage = 0.0002; // 0.02% per trade
   const decs = symbol.includes('JPY') ? 2 : symbol.includes('BBRI') || symbol.includes('TLKM') ? 0 : 5;
 
   let balance = 10000.0;
@@ -1075,20 +1094,28 @@ async function runRealBacktest(symbol, period, minProbability, riskRewardRatio) 
       const tp = parseFloat(activeTrade.tp);
       let sl = parseFloat(activeTrade.sl);
 
-      // BE trigger logic
-      if (!activeTrade.isBE) {
-        if (activeTrade.type === 'BUY') {
-          const trigger = entry + (tp - entry) * 0.5;
-          if (candle.high >= trigger) {
-            activeTrade.sl = entry;
-            activeTrade.isBE = true;
-          }
-        } else {
-          const trigger = entry - (entry - tp) * 0.5;
-          if (candle.low <= trigger) {
-            activeTrade.sl = entry;
-            activeTrade.isBE = true;
-          }
+      // Trailing Stop & BE trigger logic
+      if (activeTrade.type === 'BUY') {
+        const triggerBE = entry + (tp - entry) * 0.5;
+        const triggerTS = entry + (tp - entry) * 0.75;
+        if (candle.high >= triggerTS) {
+          activeTrade.sl = entry + (tp - entry) * 0.5;
+          activeTrade.isTS = true;
+          activeTrade.isBE = true;
+        } else if (candle.high >= triggerBE && !activeTrade.isBE) {
+          activeTrade.sl = entry;
+          activeTrade.isBE = true;
+        }
+      } else {
+        const triggerBE = entry - (entry - tp) * 0.5;
+        const triggerTS = entry - (entry - tp) * 0.75;
+        if (candle.low <= triggerTS) {
+          activeTrade.sl = entry - (entry - tp) * 0.5;
+          activeTrade.isTS = true;
+          activeTrade.isBE = true;
+        } else if (candle.low <= triggerBE && !activeTrade.isBE) {
+          activeTrade.sl = entry;
+          activeTrade.isBE = true;
         }
       }
 
@@ -1103,8 +1130,16 @@ async function runRealBacktest(symbol, period, minProbability, riskRewardRatio) 
           outcome = 'PROFIT';
         } else if (candle.low <= sl) {
           isClosed = true;
-          pnlMultiplier = activeTrade.isBE ? 0 : -1.0;
-          outcome = activeTrade.isBE ? 'BREAK EVEN' : 'LOSS';
+          if (activeTrade.isTS) {
+            pnlMultiplier = 0.5 * riskRewardRatio;
+            outcome = 'TRAILING STOP';
+          } else if (activeTrade.isBE) {
+            pnlMultiplier = 0;
+            outcome = 'BREAK EVEN';
+          } else {
+            pnlMultiplier = -1.0;
+            outcome = 'LOSS';
+          }
         }
       } else {
         if (candle.low <= tp) {
@@ -1113,21 +1148,35 @@ async function runRealBacktest(symbol, period, minProbability, riskRewardRatio) 
           outcome = 'PROFIT';
         } else if (candle.high >= sl) {
           isClosed = true;
-          pnlMultiplier = activeTrade.isBE ? 0 : -1.0;
-          outcome = activeTrade.isBE ? 'BREAK EVEN' : 'LOSS';
+          if (activeTrade.isTS) {
+            pnlMultiplier = 0.5 * riskRewardRatio;
+            outcome = 'TRAILING STOP';
+          } else if (activeTrade.isBE) {
+            pnlMultiplier = 0;
+            outcome = 'BREAK EVEN';
+          } else {
+            pnlMultiplier = -1.0;
+            outcome = 'LOSS';
+          }
         }
       }
 
       if (isClosed) {
         const riskAmount = balance * 0.01; // 1% risk per trade
-        const tradePnl = riskAmount * pnlMultiplier;
+        let tradePnl = riskAmount * pnlMultiplier;
+        
+        // Deduct commission from PnL
+        const commissionCost = balance * commissionPercentage;
+        tradePnl -= commissionCost;
+        
         balance += tradePnl;
 
         activeTrade.status = 'closed';
-        activeTrade.closePrice = (outcome === 'PROFIT' ? tp : outcome === 'BREAK EVEN' ? entry : sl).toFixed(decs);
+        activeTrade.closePrice = (outcome === 'PROFIT' ? tp : outcome === 'TRAILING STOP' ? sl : outcome === 'BREAK EVEN' ? entry : sl).toFixed(decs);
         activeTrade.closeTime = timeStr;
         activeTrade.pnl = outcome === 'PROFIT' 
           ? `PROFIT (+${(riskRewardRatio * 1.0).toFixed(1)}%)` 
+          : outcome === 'TRAILING STOP' ? `TRAILING STOP (+${(0.5 * riskRewardRatio).toFixed(1)}%)`
           : outcome === 'BREAK EVEN' ? 'BREAK EVEN (+0.00%)' : 'LOSS (-1.0%)';
 
         if (outcome === 'PROFIT') wins++;
@@ -1143,6 +1192,12 @@ async function runRealBacktest(symbol, period, minProbability, riskRewardRatio) 
         activeTrade = null;
       }
     } else {
+      // Time Killzone for Forex (07:00 - 17:00 UTC)
+      const candleHourUTC = new Date(candle.time).getUTCHours();
+      const isForex = symbol.includes('USD') || symbol.includes('JPY');
+      const isKillzone = isForex ? (candleHourUTC >= 7 && candleHourUTC <= 17) : true;
+      if (!isKillzone) continue;
+
       // Find support/resistance in last 30 candles
       let support = candles[i-1].low;
       let resistance = candles[i-1].high;
@@ -1151,8 +1206,9 @@ async function runRealBacktest(symbol, period, minProbability, riskRewardRatio) 
         if (candles[j].high > resistance) resistance = candles[j].high;
       }
 
-      const isTrendBullish = sma[i] ? candle.close > sma[i] : false;
-      const isTrendBearish = sma[i] ? candle.close < sma[i] : false;
+      // Multi-Timeframe Trend Proxy (H1) using SMA 800
+      const isTrendBullish = sma800[i] ? candle.close > sma800[i] : false;
+      const isTrendBearish = sma800[i] ? candle.close < sma800[i] : false;
 
       let prob = 35;
       let confluences = [];
@@ -1179,15 +1235,16 @@ async function runRealBacktest(symbol, period, minProbability, riskRewardRatio) 
             id: Math.random(),
             symbol,
             type: 'BUY',
-            entry: candle.close.toFixed(decs),
-            sl: (candle.close - slDist).toFixed(decs),
-            tp: (candle.close + slDist * riskRewardRatio).toFixed(decs),
+            entry: (candle.close + spread).toFixed(decs),
+            sl: (candle.close + spread - slDist).toFixed(decs),
+            tp: (candle.close + spread + slDist * riskRewardRatio).toFixed(decs),
             rrr: `1:${riskRewardRatio}`,
             probability: `${prob}%`,
             status: 'active',
             openTime: timeStr,
             confluences: confluences.join(' + ') || 'Trend pullback',
-            isBE: false
+            isBE: false,
+            isTS: false
           };
         }
       } else if (isTrendBearish) {
@@ -1208,15 +1265,16 @@ async function runRealBacktest(symbol, period, minProbability, riskRewardRatio) 
             id: Math.random(),
             symbol,
             type: 'SELL',
-            entry: candle.close.toFixed(decs),
-            sl: (candle.close + slDist).toFixed(decs),
-            tp: (candle.close - slDist * riskRewardRatio).toFixed(decs),
+            entry: (candle.close - spread).toFixed(decs),
+            sl: (candle.close - spread + slDist).toFixed(decs),
+            tp: (candle.close - spread - slDist * riskRewardRatio).toFixed(decs),
             rrr: `1:${riskRewardRatio}`,
             probability: `${prob}%`,
             status: 'active',
             openTime: timeStr,
             confluences: confluences.join(' + ') || 'Trend pullback',
-            isBE: false
+            isBE: false,
+            isTS: false
           };
         }
       }
