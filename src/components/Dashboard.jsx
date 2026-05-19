@@ -1416,232 +1416,260 @@ INSTRUKSI PENTING:
     }
   };
 
-  const runBacktestSimulation = () => {
+  const runBacktestSimulation = async () => {
     setIsBacktesting(true);
     setBacktestResults(null);
 
-    setTimeout(() => {
-      try {
-        const { symbol, period, minProbability, riskRewardRatio } = backtestSettings;
-        const symbolSeed = symbol.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
-        let price = livePrices[symbol] || (symbol.includes('JPY') ? 156.00 : symbol.includes('BBRI') ? 4700 : symbol.includes('XAU') ? 2400.00 : 1.0850);
-        
-        const intervals = period * 24 * 4; // M15 intervals
-        const startTime = Date.now() - (period * 24 * 3600 * 1000);
-        const candles = [];
-        
-        for (let i = 0; i < intervals; i++) {
-          const time = startTime + (i * 15 * 60 * 1000);
-          const drift = Math.sin(time / (24 * 3600 * 1000) + symbolSeed) * 0.0002;
-          const noise = (Math.random() - 0.5) * 0.0015;
-          price = price * (1 + drift + noise);
-          candles.push({ time, price });
+    const { symbol, period, minProbability, riskRewardRatio } = backtestSettings;
+
+    try {
+      const res = await fetch('/api/trading-bot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'run_backtest',
+          symbol,
+          period,
+          minProbability,
+          riskRewardRatio
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.results) {
+          setBacktestResults(data.results);
+          setIsBacktesting(false);
+          return;
         }
+      }
+      throw new Error('Gagal memuat hasil backtesting dari API backend.');
+    } catch (err) {
+      console.warn('Gagal menjalankan backtest backend, menggunakan fallback emulator lokal frontend:', err.message);
+      
+      // Fallback: local synthetic simulation
+      setTimeout(() => {
+        try {
+          const symbolSeed = symbol.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+          let price = livePrices[symbol] || (symbol.includes('JPY') ? 156.00 : symbol.includes('BBRI') ? 4700 : symbol.includes('XAU') ? 2400.00 : 1.0850);
+          
+          const intervals = period * 24 * 4; // M15 intervals
+          const startTime = Date.now() - (period * 24 * 3600 * 1000);
+          const candles = [];
+          
+          for (let i = 0; i < intervals; i++) {
+            const time = startTime + (i * 15 * 60 * 1000);
+            const drift = Math.sin(time / (24 * 3600 * 1000) + symbolSeed) * 0.0002;
+            const noise = (Math.random() - 0.5) * 0.0015;
+            price = price * (1 + drift + noise);
+            candles.push({ time, price });
+          }
 
-        const trades = [];
-        let activeTrade = null;
-        let balance = 100.0;
-        const equityCurve = [{ time: startTime, balance: 100.0 }];
-        
-        const distMap = {
-          'EURUSD': 0.00100, 'GBPUSD': 0.00150, 'USDJPY': 0.20, 'XAUUSD': 6.00,
-          'AAPL': 1.50, 'TSLA': 2.50, 'BBRI': 40, 'TLKM': 20
-        };
-        const slDist = distMap[symbol] || 0.01;
-        const decs = symbol.includes('JPY') ? 2 : symbol.includes('BBRI') || symbol.includes('TLKM') ? 0 : 5;
+          const trades = [];
+          let activeTrade = null;
+          let balance = 100.0;
+          const equityCurve = [{ time: startTime, balance: 100.0 }];
+          
+          const distMap = {
+            'EURUSD': 0.00100, 'GBPUSD': 0.00150, 'USDJPY': 0.20, 'XAUUSD': 6.00,
+            'AAPL': 1.50, 'TSLA': 2.50, 'BBRI': 40, 'TLKM': 20
+          };
+          const slDist = distMap[symbol] || 0.01;
+          const decs = symbol.includes('JPY') ? 2 : symbol.includes('BBRI') || symbol.includes('TLKM') ? 0 : 5;
 
-        for (let i = 0; i < candles.length; i++) {
-          const candle = candles[i];
-          const timeStr = new Date(candle.time).toLocaleString('id-ID', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) + ' WIB';
+          for (let i = 0; i < candles.length; i++) {
+            const candle = candles[i];
+            const timeStr = new Date(candle.time).toLocaleString('id-ID', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) + ' WIB';
 
-          if (activeTrade) {
-            if (!activeTrade.isBE) {
-              const entry = parseFloat(activeTrade.entry);
-              const tp = parseFloat(activeTrade.tp);
+            if (activeTrade) {
+              if (!activeTrade.isBE) {
+                const entry = parseFloat(activeTrade.entry);
+                const tp = parseFloat(activeTrade.tp);
+                if (activeTrade.type === 'BUY') {
+                  const triggerLevel = entry + (tp - entry) * 0.5;
+                  if (candle.price >= triggerLevel) {
+                    activeTrade.sl = entry;
+                    activeTrade.isBE = true;
+                  }
+                } else {
+                  const triggerLevel = entry - (entry - tp) * 0.5;
+                  if (candle.price <= triggerLevel) {
+                    activeTrade.sl = entry;
+                    activeTrade.isBE = true;
+                  }
+                }
+              }
+
+              let shouldClose = false;
+              let pnlChange = 0;
+              let resultStatus = '';
+              
+              const entryVal = parseFloat(activeTrade.entry);
+              const slVal = parseFloat(activeTrade.sl);
+              const tpVal = parseFloat(activeTrade.tp);
+
               if (activeTrade.type === 'BUY') {
-                const triggerLevel = entry + (tp - entry) * 0.5;
-                if (candle.price >= triggerLevel) {
-                  activeTrade.sl = entry;
-                  activeTrade.isBE = true;
+                if (candle.price >= tpVal) {
+                  shouldClose = true;
+                  pnlChange = 0.20 * riskRewardRatio;
+                  resultStatus = 'PROFIT';
+                } else if (candle.price <= slVal) {
+                  shouldClose = true;
+                  pnlChange = activeTrade.isBE ? 0 : -0.20;
+                  resultStatus = activeTrade.isBE ? 'BREAK EVEN' : 'LOSS';
                 }
               } else {
-                const triggerLevel = entry - (entry - tp) * 0.5;
-                if (candle.price <= triggerLevel) {
-                  activeTrade.sl = entry;
-                  activeTrade.isBE = true;
+                if (candle.price <= tpVal) {
+                  shouldClose = true;
+                  pnlChange = 0.20 * riskRewardRatio;
+                  resultStatus = 'PROFIT';
+                } else if (candle.price >= slVal) {
+                  shouldClose = true;
+                  pnlChange = activeTrade.isBE ? 0 : -0.20;
+                  resultStatus = activeTrade.isBE ? 'BREAK EVEN' : 'LOSS';
                 }
               }
-            }
 
-            let shouldClose = false;
-            let pnlChange = 0;
-            let resultStatus = '';
-            
-            const entryVal = parseFloat(activeTrade.entry);
-            const slVal = parseFloat(activeTrade.sl);
-            const tpVal = parseFloat(activeTrade.tp);
-
-            if (activeTrade.type === 'BUY') {
-              if (candle.price >= tpVal) {
-                shouldClose = true;
-                pnlChange = 0.20 * riskRewardRatio;
-                resultStatus = 'PROFIT';
-              } else if (candle.price <= slVal) {
-                shouldClose = true;
-                pnlChange = activeTrade.isBE ? 0 : -0.20;
-                resultStatus = activeTrade.isBE ? 'BREAK EVEN' : 'LOSS';
+              if (shouldClose) {
+                balance += pnlChange;
+                activeTrade.pnl = resultStatus === 'PROFIT' 
+                  ? `PROFIT (+${(0.20 * riskRewardRatio).toFixed(2)}%)` 
+                  : resultStatus === 'BREAK EVEN' ? 'BREAK EVEN (+0.00%)' : `LOSS (-0.20%)`;
+                activeTrade.status = 'closed';
+                activeTrade.closePrice = candle.price.toFixed(decs);
+                activeTrade.closeTime = timeStr;
+                
+                trades.unshift(activeTrade);
+                equityCurve.push({ time: candle.time, balance: parseFloat(balance.toFixed(2)) });
+                activeTrade = null;
               }
             } else {
-              if (candle.price <= tpVal) {
-                shouldClose = true;
-                pnlChange = 0.20 * riskRewardRatio;
-                resultStatus = 'PROFIT';
-              } else if (candle.price >= slVal) {
-                shouldClose = true;
-                pnlChange = activeTrade.isBE ? 0 : -0.20;
-                resultStatus = activeTrade.isBE ? 'BREAK EVEN' : 'LOSS';
-              }
-            }
-
-            if (shouldClose) {
-              balance += pnlChange;
-              activeTrade.pnl = resultStatus === 'PROFIT' 
-                ? `PROFIT (+${(0.20 * riskRewardRatio).toFixed(2)}%)` 
-                : resultStatus === 'BREAK EVEN' ? 'BREAK EVEN (+0.00%)' : `LOSS (-0.20%)`;
-              activeTrade.status = 'closed';
-              activeTrade.closePrice = candle.price.toFixed(decs);
-              activeTrade.closeTime = timeStr;
+              const h1Wave = Math.sin(candle.time / (3600 * 1000) + symbolSeed);
+              const h1Trend = h1Wave > 0.20 ? 'BULLISH' : h1Wave < -0.20 ? 'BEARISH' : 'SIDEWAYS';
               
-              trades.unshift(activeTrade);
-              equityCurve.push({ time: candle.time, balance: parseFloat(balance.toFixed(2)) });
-              activeTrade = null;
-            }
-          } else {
-            const h1Wave = Math.sin(candle.time / (3600 * 1000) + symbolSeed);
-            const h1Trend = h1Wave > 0.20 ? 'BULLISH' : h1Wave < -0.20 ? 'BEARISH' : 'SIDEWAYS';
-            
-            if (h1Trend !== 'SIDEWAYS') {
-              const sweepWave = Math.sin(candle.time / (45 * 60 * 1000) + symbolSeed + 1);
-              const liqSweep = sweepWave > 0.65 ? 'BULLISH_SWEEP' : sweepWave < -0.65 ? 'BEARISH_SWEEP' : 'NONE';
-              const chochWave = Math.sin(candle.time / (30 * 60 * 1000) + symbolSeed + 2);
-              const hasCHoCH = chochWave > 0.35;
-              const obWave = Math.sin(candle.time / (15 * 60 * 1000) + symbolSeed + 3);
-              const priceInOrderBlock = obWave > 0.40;
-              const fvgWave = Math.sin(candle.time / (10 * 60 * 1000) + symbolSeed + 4);
-              const fvgMitigated = fvgWave > 0.25;
-              
-              const sdWave = Math.sin(candle.time / (20 * 60 * 1000) + symbolSeed + 5);
-              const inDemandZone = sdWave > 0.45;
-              const inSupplyZone = sdWave < -0.45;
-              
-              const srWave = Math.sin(candle.time / (12 * 60 * 1000) + symbolSeed + 6);
-              const atMajorSupport = srWave > 0.50;
-              const atMajorResistance = srWave < -0.50;
-
-              let prob = 35;
-              let confluences = [];
-
-              if (h1Trend === 'BULLISH') {
-                if (liqSweep === 'BULLISH_SWEEP') { prob += 10; confluences.push('SMC Liquidity Sweep'); }
-                if (hasCHoCH) { prob += 10; confluences.push('SMC M15 CHoCH'); }
-                if (priceInOrderBlock) { prob += 10; confluences.push('SMC OB'); }
-                if (fvgMitigated) { prob += 10; confluences.push('SMC FVG'); }
-                if (inDemandZone) { prob += 15; confluences.push('S&D Demand'); }
-                if (atMajorSupport) { prob += 10; confluences.push('S&R Support'); }
+              if (h1Trend !== 'SIDEWAYS') {
+                const sweepWave = Math.sin(candle.time / (45 * 60 * 1000) + symbolSeed + 1);
+                const liqSweep = sweepWave > 0.65 ? 'BULLISH_SWEEP' : sweepWave < -0.65 ? 'BEARISH_SWEEP' : 'NONE';
+                const chochWave = Math.sin(candle.time / (30 * 60 * 1000) + symbolSeed + 2);
+                const hasCHoCH = chochWave > 0.35;
+                const obWave = Math.sin(candle.time / (15 * 60 * 1000) + symbolSeed + 3);
+                const priceInOrderBlock = obWave > 0.40;
+                const fvgWave = Math.sin(candle.time / (10 * 60 * 1000) + symbolSeed + 4);
+                const fvgMitigated = fvgWave > 0.25;
                 
-                const m15Rsi = Math.round(50 + Math.sin(candle.time / (15 * 60 * 1000) + symbolSeed + 7) * 20);
-                if (m15Rsi < 45) { prob += 5; confluences.push('RSI Pullback'); }
-
-                if (prob >= minProbability) {
-                  const entry = candle.price;
-                  const sl = entry - slDist;
-                  const tp = entry + slDist * riskRewardRatio;
-                  activeTrade = {
-                    id: Math.random(),
-                    symbol,
-                    type: 'BUY',
-                    entry: entry.toFixed(decs),
-                    sl: sl.toFixed(decs),
-                    tp: tp.toFixed(decs),
-                    rrr: `1:${riskRewardRatio}`,
-                    probability: `${prob}%`,
-                    status: 'active',
-                    openTime: timeStr,
-                    confluences: confluences.join(' + '),
-                    isBE: false
-                  };
-                }
-              } else if (h1Trend === 'BEARISH') {
-                if (liqSweep === 'BEARISH_SWEEP') { prob += 10; confluences.push('SMC Liquidity Sweep'); }
-                if (hasCHoCH) { prob += 10; confluences.push('SMC M15 CHoCH'); }
-                if (priceInOrderBlock) { prob += 10; confluences.push('SMC OB'); }
-                if (fvgMitigated) { prob += 10; confluences.push('SMC FVG'); }
-                if (inSupplyZone) { prob += 15; confluences.push('S&D Supply'); }
-                if (atMajorResistance) { prob += 10; confluences.push('S&R Resistance'); }
+                const sdWave = Math.sin(candle.time / (20 * 60 * 1000) + symbolSeed + 5);
+                const inDemandZone = sdWave > 0.45;
+                const inSupplyZone = sdWave < -0.45;
                 
-                const m15Rsi = Math.round(50 + Math.sin(candle.time / (15 * 60 * 1000) + symbolSeed + 7) * 20);
-                if (m15Rsi > 55) { prob += 5; confluences.push('RSI Rally'); }
+                const srWave = Math.sin(candle.time / (12 * 60 * 1000) + symbolSeed + 6);
+                const atMajorSupport = srWave > 0.50;
+                const atMajorResistance = srWave < -0.50;
 
-                if (prob >= minProbability) {
-                  const entry = candle.price;
-                  const sl = entry + slDist;
-                  const tp = entry - slDist * riskRewardRatio;
-                  activeTrade = {
-                    id: Math.random(),
-                    symbol,
-                    type: 'SELL',
-                    entry: entry.toFixed(decs),
-                    sl: sl.toFixed(decs),
-                    tp: tp.toFixed(decs),
-                    rrr: `1:${riskRewardRatio}`,
-                    probability: `${prob}%`,
-                    status: 'active',
-                    openTime: timeStr,
-                    confluences: confluences.join(' + '),
-                    isBE: false
-                  };
+                let prob = 35;
+                let confluences = [];
+
+                if (h1Trend === 'BULLISH') {
+                  if (liqSweep === 'BULLISH_SWEEP') { prob += 10; confluences.push('SMC Liquidity Sweep'); }
+                  if (hasCHoCH) { prob += 10; confluences.push('SMC M15 CHoCH'); }
+                  if (priceInOrderBlock) { prob += 10; confluences.push('SMC OB'); }
+                  if (fvgMitigated) { prob += 10; confluences.push('SMC FVG'); }
+                  if (inDemandZone) { prob += 15; confluences.push('S&D Demand'); }
+                  if (atMajorSupport) { prob += 10; confluences.push('S&R Support'); }
+                  
+                  const m15Rsi = Math.round(50 + Math.sin(candle.time / (15 * 60 * 1000) + symbolSeed + 7) * 20);
+                  if (m15Rsi < 45) { prob += 5; confluences.push('RSI Pullback'); }
+
+                  if (prob >= minProbability) {
+                    const entry = candle.price;
+                    const sl = entry - slDist;
+                    const tp = entry + slDist * riskRewardRatio;
+                    activeTrade = {
+                      id: Math.random(),
+                      symbol,
+                      type: 'BUY',
+                      entry: entry.toFixed(decs),
+                      sl: sl.toFixed(decs),
+                      tp: tp.toFixed(decs),
+                      rrr: `1:${riskRewardRatio}`,
+                      probability: `${prob}%`,
+                      status: 'active',
+                      openTime: timeStr,
+                      confluences: confluences.join(' + '),
+                      isBE: false
+                    };
+                  }
+                } else if (h1Trend === 'BEARISH') {
+                  if (liqSweep === 'BEARISH_SWEEP') { prob += 10; confluences.push('SMC Liquidity Sweep'); }
+                  if (hasCHoCH) { prob += 10; confluences.push('SMC M15 CHoCH'); }
+                  if (priceInOrderBlock) { prob += 10; confluences.push('SMC OB'); }
+                  if (fvgMitigated) { prob += 10; confluences.push('SMC FVG'); }
+                  if (inSupplyZone) { prob += 15; confluences.push('S&D Supply'); }
+                  if (atMajorResistance) { prob += 10; confluences.push('S&R Resistance'); }
+                  
+                  const m15Rsi = Math.round(50 + Math.sin(candle.time / (15 * 60 * 1000) + symbolSeed + 7) * 20);
+                  if (m15Rsi > 55) { prob += 5; confluences.push('RSI Rally'); }
+
+                  if (prob >= minProbability) {
+                    const entry = candle.price;
+                    const sl = entry + slDist;
+                    const tp = entry - slDist * riskRewardRatio;
+                    activeTrade = {
+                      id: Math.random(),
+                      symbol,
+                      type: 'SELL',
+                      entry: entry.toFixed(decs),
+                      sl: sl.toFixed(decs),
+                      tp: tp.toFixed(decs),
+                      rrr: `1:${riskRewardRatio}`,
+                      probability: `${prob}%`,
+                      status: 'active',
+                      openTime: timeStr,
+                      confluences: confluences.join(' + '),
+                      isBE: false
+                    };
+                  }
                 }
               }
             }
           }
-        }
 
-        const totalTrades = trades.length;
-        const profitTrades = trades.filter(t => t.pnl.includes('PROFIT'));
-        const lossTrades = trades.filter(t => t.pnl.includes('LOSS'));
-        const beTrades = trades.filter(t => t.pnl.includes('BREAK EVEN'));
-        
-        const wins = profitTrades.length;
-        const losses = lossTrades.length;
-        const winRate = totalTrades > 0 ? ((wins / (wins + losses)) * 100).toFixed(1) : '0';
-        
-        const finalReturn = balance - 100.0;
-        
-        let peak = 100.0;
-        let maxDd = 0.0;
-        for (let eq of equityCurve) {
-          if (eq.balance > peak) peak = eq.balance;
-          const dd = ((peak - eq.balance) / peak) * 100;
-          if (dd > maxDd) maxDd = dd;
-        }
+          const totalTrades = trades.length;
+          const profitTrades = trades.filter(t => t.pnl.includes('PROFIT'));
+          const lossTrades = trades.filter(t => t.pnl.includes('LOSS'));
+          const beTrades = trades.filter(t => t.pnl.includes('BREAK EVEN'));
+          
+          const wins = profitTrades.length;
+          const losses = lossTrades.length;
+          const winRate = totalTrades > 0 ? ((wins / (wins + losses)) * 100).toFixed(1) : '0';
+          
+          const finalReturn = balance - 100.0;
+          
+          let peak = 100.0;
+          let maxDd = 0.0;
+          for (let eq of equityCurve) {
+            if (eq.balance > peak) peak = eq.balance;
+            const dd = ((peak - eq.balance) / peak) * 100;
+            if (dd > maxDd) maxDd = dd;
+          }
 
-        setBacktestResults({
-          totalTrades,
-          wins,
-          losses,
-          beTrades: beTrades.length,
-          winRate,
-          finalReturn: `${finalReturn >= 0 ? '+' : ''}${finalReturn.toFixed(2)}%`,
-          maxDrawdown: `${maxDd.toFixed(2)}%`,
-          trades,
-          equityCurve
-        });
-      } catch (err) {
-        console.error('Backtest error:', err);
-      } finally {
-        setIsBacktesting(false);
-      }
-    }, 1200);
+          setBacktestResults({
+            totalTrades,
+            wins,
+            losses,
+            beTrades: beTrades.length,
+            winRate,
+            finalReturn: `${finalReturn >= 0 ? '+' : ''}${finalReturn.toFixed(2)}%`,
+            maxDrawdown: `${maxDd.toFixed(2)}%`,
+            trades,
+            equityCurve
+          });
+        } catch (err) {
+          console.error('Backtest error:', err);
+        } finally {
+          setIsBacktesting(false);
+        }
+      }, 1200);
+    }
   };
 
   useEffect(() => {

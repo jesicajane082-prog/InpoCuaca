@@ -340,6 +340,26 @@ async function vercelHandler(req, res) {
         });
       }
 
+      if (body.action === 'run_backtest') {
+        const symbol = body.symbol || 'EURUSD';
+        const period = parseInt(body.period) || 30;
+        const minProbability = parseInt(body.minProbability) || 60;
+        const riskRewardRatio = parseFloat(body.riskRewardRatio) || 2.3;
+
+        try {
+          const results = await runRealBacktest(symbol, period, minProbability, riskRewardRatio);
+          return res.status(200).json({
+            success: true,
+            results
+          });
+        } catch (err) {
+          return res.status(500).json({
+            success: false,
+            message: `Gagal menjalankan backtest: ${err.message}`
+          });
+        }
+      }
+
       if (body.action === 'close_all') {
         let closedCount = 0;
         const updatedTrades = db.trades.map(trade => {
@@ -726,6 +746,260 @@ async function vercelHandler(req, res) {
       error: err.message
     });
   }
+}
+
+async function runRealBacktest(symbol, period, minProbability, riskRewardRatio) {
+  const TICKER_MAP = {
+    'EURUSD': 'EURUSD=X',
+    'GBPUSD': 'GBPUSD=X',
+    'USDJPY': 'USDJPY=X',
+    'XAUUSD': 'GC=F',
+    'BBRI': 'BBRI.JK',
+    'TLKM': 'TLKM.JK',
+    'AAPL': 'AAPL',
+    'TSLA': 'TSLA'
+  };
+
+  const ticker = TICKER_MAP[symbol] || 'EURUSD=X';
+  const range = period <= 7 ? '7d' : period <= 14 ? '14d' : period <= 30 ? '30d' : '60d';
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=15m&range=${range}`;
+
+  const response = await fetch(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Yahoo Finance API returned status ${response.status}`);
+  }
+
+  const data = await response.json();
+  if (!data.chart || !data.chart.result || !data.chart.result[0]) {
+    throw new Error('Format data Yahoo Finance tidak dikenal atau data kosong.');
+  }
+
+  const result = data.chart.result[0];
+  const quote = result.indicators.quote[0];
+  const timestamps = result.timestamp;
+
+  if (!timestamps || timestamps.length === 0) {
+    throw new Error('Tidak ada data candlestick untuk aset ini pada periode tersebut.');
+  }
+
+  const candles = [];
+  for (let i = 0; i < timestamps.length; i++) {
+    if (quote.open && quote.open[i] && quote.high && quote.high[i] && quote.low && quote.low[i] && quote.close && quote.close[i]) {
+      candles.push({
+        time: timestamps[i] * 1000,
+        open: quote.open[i],
+        high: quote.high[i],
+        low: quote.low[i],
+        close: quote.close[i]
+      });
+    }
+  }
+
+  const len = candles.length;
+  if (len < 50) {
+    throw new Error('Data historis tidak mencukupi untuk melakukan backtesting.');
+  }
+
+  // Calculate SMA 200 on 15m candles
+  const smaPeriod = 200;
+  let smaSum = 0;
+  const sma = [];
+  for (let i = 0; i < len; i++) {
+    smaSum += candles[i].close;
+    if (i >= smaPeriod - 1) {
+      if (i > smaPeriod - 1) smaSum -= candles[i - smaPeriod].close;
+      sma.push(smaSum / smaPeriod);
+    } else {
+      sma.push(null);
+    }
+  }
+
+  // Determine standard SL/TP distance based on asset volatility
+  const distMap = {
+    'EURUSD': 0.0012, 'GBPUSD': 0.0018, 'USDJPY': 0.25, 'XAUUSD': 7.0,
+    'AAPL': 2.0, 'TSLA': 3.5, 'BBRI': 50, 'TLKM': 30
+  };
+  const slDist = distMap[symbol] || 0.01;
+  const decs = symbol.includes('JPY') ? 2 : symbol.includes('BBRI') || symbol.includes('TLKM') ? 0 : 5;
+
+  let balance = 10000.0;
+  const initialBalance = 10000.0;
+  let activeTrade = null;
+  const trades = [];
+  const equityCurve = [{ time: candles[0].time, balance: 100.0 }]; // percentage growth
+
+  let wins = 0;
+  let losses = 0;
+  let beTrades = 0;
+
+  for (let i = 50; i < len; i++) {
+    const candle = candles[i];
+    const timeStr = new Date(candle.time).toLocaleString('id-ID', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) + ' WIB';
+
+    if (activeTrade) {
+      const entry = parseFloat(activeTrade.entry);
+      const tp = parseFloat(activeTrade.tp);
+      let sl = parseFloat(activeTrade.sl);
+
+      // BE trigger logic
+      if (!activeTrade.isBE) {
+        if (activeTrade.type === 'BUY') {
+          const trigger = entry + (tp - entry) * 0.5;
+          if (candle.high >= trigger) {
+            activeTrade.sl = entry;
+            activeTrade.isBE = true;
+          }
+        } else {
+          const trigger = entry - (entry - tp) * 0.5;
+          if (candle.low <= trigger) {
+            activeTrade.sl = entry;
+            activeTrade.isBE = true;
+          }
+        }
+      }
+
+      let isClosed = false;
+      let pnlMultiplier = 0;
+      let outcome = '';
+
+      if (activeTrade.type === 'BUY') {
+        if (candle.high >= tp) {
+          isClosed = true;
+          pnlMultiplier = riskRewardRatio;
+          outcome = 'PROFIT';
+        } else if (candle.low <= sl) {
+          isClosed = true;
+          pnlMultiplier = activeTrade.isBE ? 0 : -1.0;
+          outcome = activeTrade.isBE ? 'BREAK EVEN' : 'LOSS';
+        }
+      } else {
+        if (candle.low <= tp) {
+          isClosed = true;
+          pnlMultiplier = riskRewardRatio;
+          outcome = 'PROFIT';
+        } else if (candle.high >= sl) {
+          isClosed = true;
+          pnlMultiplier = activeTrade.isBE ? 0 : -1.0;
+          outcome = activeTrade.isBE ? 'BREAK EVEN' : 'LOSS';
+        }
+      }
+
+      if (isClosed) {
+        const riskAmount = balance * 0.01; // 1% risk per trade
+        const tradePnl = riskAmount * pnlMultiplier;
+        balance += tradePnl;
+
+        activeTrade.status = 'closed';
+        activeTrade.closePrice = (outcome === 'PROFIT' ? tp : outcome === 'BREAK EVEN' ? entry : sl).toFixed(decs);
+        activeTrade.closeTime = timeStr;
+        activeTrade.pnl = outcome === 'PROFIT' 
+          ? `PROFIT (+${(riskRewardRatio * 1.0).toFixed(1)}%)` 
+          : outcome === 'BREAK EVEN' ? 'BREAK EVEN (+0.00%)' : 'LOSS (-1.0%)';
+
+        if (outcome === 'PROFIT') wins++;
+        else if (outcome === 'LOSS') losses++;
+        else beTrades++;
+
+        trades.unshift(activeTrade); // latest first
+        
+        // Push percentage growth curve
+        const pctGrowth = ((balance - initialBalance) / initialBalance) * 100 + 100;
+        equityCurve.push({ time: candle.time, balance: parseFloat(pctGrowth.toFixed(2)) });
+        
+        activeTrade = null;
+      }
+    } else {
+      // Find support/resistance in last 30 candles
+      let support = candles[i-1].low;
+      let resistance = candles[i-1].high;
+      for (let j = i - 30; j < i; j++) {
+        if (candles[j].low < support) support = candles[j].low;
+        if (candles[j].high > resistance) resistance = candles[j].high;
+      }
+
+      const isTrendBullish = sma[i] ? candle.close > sma[i] : false;
+      const isTrendBearish = sma[i] ? candle.close < sma[i] : false;
+
+      let prob = 35;
+      let confluences = [];
+
+      const isBullishSweep = candle.low < support && candle.close > support;
+      const isBearishSweep = candle.high > resistance && candle.close < resistance;
+
+      if (isTrendBullish) {
+        if (isBullishSweep) { prob += 15; confluences.push('SMC Liquidity Sweep'); }
+        if (candle.close > candles[i-1].high) { prob += 10; confluences.push('SMC CHoCH'); }
+        if (candle.low <= support * 1.0005) { prob += 15; confluences.push('S&R Support'); }
+
+        if (prob >= minProbability) {
+          activeTrade = {
+            id: Math.random(),
+            symbol,
+            type: 'BUY',
+            entry: candle.close.toFixed(decs),
+            sl: (candle.close - slDist).toFixed(decs),
+            tp: (candle.close + slDist * riskRewardRatio).toFixed(decs),
+            rrr: `1:${riskRewardRatio}`,
+            probability: `${prob}%`,
+            status: 'active',
+            openTime: timeStr,
+            confluences: confluences.join(' + ') || 'Trend pullback',
+            isBE: false
+          };
+        }
+      } else if (isTrendBearish) {
+        if (isBearishSweep) { prob += 15; confluences.push('SMC Liquidity Sweep'); }
+        if (candle.close < candles[i-1].low) { prob += 10; confluences.push('SMC CHoCH'); }
+        if (candle.high >= resistance * 0.9995) { prob += 15; confluences.push('S&R Resistance'); }
+
+        if (prob >= minProbability) {
+          activeTrade = {
+            id: Math.random(),
+            symbol,
+            type: 'SELL',
+            entry: candle.close.toFixed(decs),
+            sl: (candle.close + slDist).toFixed(decs),
+            tp: (candle.close - slDist * riskRewardRatio).toFixed(decs),
+            rrr: `1:${riskRewardRatio}`,
+            probability: `${prob}%`,
+            status: 'active',
+            openTime: timeStr,
+            confluences: confluences.join(' + ') || 'Trend pullback',
+            isBE: false
+          };
+        }
+      }
+    }
+  }
+
+  // Calculate Max Drawdown
+  let peak = 100.0;
+  let maxDrawdown = 0.0;
+  for (let eq of equityCurve) {
+    if (eq.balance > peak) peak = eq.balance;
+    const dd = ((peak - eq.balance) / peak) * 100;
+    if (dd > maxDrawdown) maxDrawdown = dd;
+  }
+
+  const finalReturnPct = (((balance - initialBalance) / initialBalance) * 100);
+  const finalReturnStr = `${finalReturnPct >= 0 ? '+' : ''}${finalReturnPct.toFixed(2)}%`;
+
+  return {
+    totalTrades: trades.length,
+    wins,
+    losses,
+    beTrades,
+    winRate: trades.length > 0 ? Math.round((wins / (wins + losses || 1)) * 100) : 0,
+    finalReturn: finalReturnStr,
+    maxDrawdown: `${maxDrawdown.toFixed(2)}%`,
+    trades,
+    equityCurve
+  };
 }
 
 // Ekspor default untuk Vercel
