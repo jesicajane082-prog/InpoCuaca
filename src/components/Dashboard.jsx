@@ -974,202 +974,399 @@ INSTRUKSI PENTING:
     }
   });
 
-  // Live Trading Simulation Engine Loop (Runs every 3 seconds)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const symbols = ['EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD', 'AAPL', 'TSLA', 'BBRI', 'TLKM'];
-      
-      // 1. We no longer apply random micro-fluctuations. The prices are strictly governed by the TradingView Scanner API to maintain 100% precision.
+  const [generalLogs, setGeneralLogs] = useState([]);
+  const [isTriggering, setIsTriggering] = useState(false);
 
-      // 2. Evaluate active trades and boundary crossings for all symbols
-      setBotLogs(prevLogs => {
-        const nextLogs = { ...prevLogs };
-        
-        symbols.forEach(sym => {
-          const symbolLogs = [...(prevLogs[sym] || [])];
-          const activeTradeIdx = symbolLogs.findIndex(log => log.status === 'active');
-          const currentLive = livePrices[sym];
+  const fetchBackendTrades = useCallback(async () => {
+    try {
+      const res = await fetch('/api/get-trades');
+      // Detect if we received JS source code instead of JSON (Vite dev server static fallback)
+      const text = await res.clone().text();
+      if (text.trim().startsWith('import') || text.trim().startsWith('const') || text.trim().startsWith('export')) {
+        throw new Error('Vite dev server static file fallback');
+      }
+
+      const data = await res.json();
+      if (data.success) {
+        setBotLogs(data.botLogs || {});
+        setPerformanceData(data.performance || {});
+        setGeneralLogs(data.logs || []);
+      }
+    } catch (e) {
+      console.warn('Gagal memuat log bot backend, beralih ke Emulator Lokal Frontend:', e.message);
+      
+      const savedData = localStorage.getItem('local_trading_db');
+      if (savedData) {
+        try {
+          const parsed = JSON.parse(savedData);
+          setBotLogs(parsed.botLogs || {});
+          setPerformanceData(parsed.performance || {});
+          setGeneralLogs(parsed.logs || []);
+          return;
+        } catch (err) {}
+      }
+
+      if (generalLogs.length === 0) {
+        setGeneralLogs([
+          { id: 1, time: new Date().toLocaleTimeString('id-ID') + ' WIB', text: '[SISTEM] Mode Emulator Lokal aktif. Silakan klik "⚡ Pemicu Manual Bot" untuk simulasi scan.' }
+        ]);
+      }
+    }
+  }, [generalLogs.length, performanceData]);
+
+  const triggerManualBotScan = async () => {
+    setIsTriggering(true);
+    try {
+      const res = await fetch('/api/trading-bot');
+      const text = await res.clone().text();
+      if (text.trim().startsWith('import') || text.trim().startsWith('const') || text.trim().startsWith('export')) {
+        throw new Error('Vite dev server static file fallback');
+      }
+      
+      if (res.ok) {
+        await fetchBackendTrades();
+      }
+    } catch (e) {
+      console.log('Menjalankan Bot Scan di Emulator Lokal Frontend...');
+      
+      const db = {
+        trades: [],
+        logs: [...generalLogs],
+        performance: { ...performanceData }
+      };
+
+      const symbols = ['EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD', 'AAPL', 'TSLA', 'BBRI', 'TLKM'];
+      symbols.forEach(sym => {
+        const symTrades = botLogs[sym] || [];
+        db.trades.push(...symTrades);
+      });
+
+      const timestamp = Date.now();
+      const timeStr = new Date().toLocaleTimeString('id-ID') + ' WIB';
+      
+      const updatedTrades = [];
+      const newLogs = [];
+      for (let trade of db.trades) {
+        if (trade.status === 'active') {
+          const currentPrice = livePrices[trade.symbol] || parseFloat(trade.entry);
+          const entryNum = parseFloat(trade.entry);
+          const slNum = parseFloat(trade.sl);
+          const tpNum = parseFloat(trade.tp);
           
-          if (!currentLive) return; // Wait for rates to load
-          
-          if (activeTradeIdx !== -1) {
-            // Evaluasi active trade
-            const activeTrade = { ...symbolLogs[activeTradeIdx] };
-            const entryNum = parseFloat(activeTrade.entry);
-            const slNum = parseFloat(activeTrade.sl);
-            const tpNum = parseFloat(activeTrade.tp);
-            
-            let triggerClose = false;
-            let isWin = false;
-            let closeReason = 'Target Hit';
-            
-            // A. Boundary Crossover (SL/TP)
-            if (activeTrade.type === 'BUY') {
-              if (currentLive >= tpNum) {
-                triggerClose = true;
-                isWin = true;
-              } else if (currentLive <= slNum) {
-                triggerClose = true;
-                isWin = false;
-              }
-            } else { // SELL
-              if (currentLive <= tpNum) {
-                triggerClose = true;
-                isWin = true;
-              } else if (currentLive >= slNum) {
-                triggerClose = true;
-                isWin = false;
-              }
-            }
-            
-            // B. AI Trailing Stop Risk Management Decision (3% chance per tick to close trade early)
-            if (!triggerClose && Math.random() < 0.03) {
-              triggerClose = true;
-              const runningProfit = activeTrade.type === 'BUY'
-                ? ((currentLive - entryNum) / entryNum) * 100
-                : ((entryNum - currentLive) / entryNum) * 100;
-              isWin = runningProfit >= 0;
-              closeReason = 'AI Trailing Stop';
-            }
-            
-            if (triggerClose) {
-              // Close trade
-              const rrrParts = activeTrade.rrr.split(':').map(Number);
-              const riskMultiplier = rrrParts[1] || 2.0;
-              
-              const pnlChange = isWin ? (0.20 * riskMultiplier) : -0.20;
-              const pnlVal = isWin 
-                ? `PROFIT (+${(0.20 * riskMultiplier).toFixed(2)}%)` 
-                : `LOSS (-${(0.20).toFixed(2)}%)`;
-              
-              activeTrade.pnl = pnlVal;
-              activeTrade.status = 'closed';
-              activeTrade.time = `Selesai (${closeReason})`;
-              
-              symbolLogs[activeTradeIdx] = activeTrade;
-              
-              // Update performance stats
-              setPerformanceData(prevPerf => {
-                const currentSymbolPerf = { ...prevPerf[sym] };
-                
-                const parsePct = (val) => parseFloat(val.replace(/[+%]/g, '')) || 0;
-                const new1D = parsePct(currentSymbolPerf.profit1D) + pnlChange;
-                const new1W = parsePct(currentSymbolPerf.profit1W) + pnlChange;
-                const new1M = parsePct(currentSymbolPerf.profit1M) + pnlChange;
-                
-                currentSymbolPerf.profit1D = `${new1D >= 0 ? '+' : ''}${new1D.toFixed(2)}%`;
-                currentSymbolPerf.profit1W = `${new1W >= 0 ? '+' : ''}${new1W.toFixed(2)}%`;
-                currentSymbolPerf.profit1M = `${new1M >= 0 ? '+' : ''}${new1M.toFixed(2)}%`;
-                
-                const totalTr = parseInt(currentSymbolPerf.totalTrades) || 0;
-                currentSymbolPerf.totalTrades = `${totalTr + 1} Trades`;
-                
-                return {
-                  ...prevPerf,
-                  [sym]: currentSymbolPerf
-                };
-              });
-              
-              // Spawn a new active trade instantly
-              const tfMap = {
-                'EURUSD': 'M15', 'GBPUSD': 'M30', 'USDJPY': 'H1', 'XAUUSD': 'H4',
-                'AAPL': 'D1', 'TSLA': 'H1', 'BBRI': 'D1', 'TLKM': 'D1'
-              };
-              const tf = tfMap[sym] || 'H1';
-              
-              const distMap = {
-                'EURUSD': 0.00150, 'GBPUSD': 0.00200, 'USDJPY': 0.25, 'XAUUSD': 8.00,
-                'AAPL': 2.00, 'TSLA': 3.50, 'BBRI': 50, 'TLKM': 30
-              };
-              const slDist = distMap[sym] || 0.01;
-              
-              const isNewBuy = Math.random() > 0.5;
-              const typeStr = isNewBuy ? 'BUY' : 'SELL';
-              
-              const rrrValStr = performanceData[sym]?.avgRrr || '1:2.0';
-              const newRrrParts = rrrValStr.split(':').map(Number);
-              const newRiskMultiplier = newRrrParts[1] || 2.0;
-              
-              const newSlNum = isNewBuy ? (currentLive - slDist) : (currentLive + slDist);
-              const newTpNum = isNewBuy ? (currentLive + slDist * newRiskMultiplier) : (currentLive - slDist * newRiskMultiplier);
-              
-              const decs = sym.includes('JPY') ? 2 : sym.includes('BBRI') || sym.includes('TLKM') ? 0 : 5;
-              
-              const baseWinRate = parseFloat(performanceData[sym]?.winRate || '68%');
-              const tradeProb = (baseWinRate + (Math.random() - 0.5) * 4).toFixed(1) + '%';
-              
-              const newTrade = {
-                id: Date.now() + Math.random(),
-                type: typeStr,
-                entry: currentLive.toFixed(decs),
-                sl: newSlNum.toFixed(decs),
-                tp: newTpNum.toFixed(decs),
-                timeframe: tf,
-                rrr: rrrValStr,
-                probability: tradeProb,
-                pnl: 'RUNNING (+0.00%)',
-                status: 'active',
-                time: 'Aktif'
-              };
-              
-              symbolLogs.unshift(newTrade);
-              if (symbolLogs.length > 5) symbolLogs.pop();
+          let shouldClose = false;
+          let isWin = false;
+          let closeReason = 'Target Hit';
+
+          if (trade.type === 'BUY') {
+            if (currentPrice >= tpNum) {
+              shouldClose = true;
+              isWin = true;
+            } else if (currentPrice <= slNum) {
+              shouldClose = true;
+              isWin = false;
             }
           } else {
-            // Spawn running trade if empty
-            const tfMap = {
-              'EURUSD': 'M15', 'GBPUSD': 'M30', 'USDJPY': 'H1', 'XAUUSD': 'H4',
-              'AAPL': 'D1', 'TSLA': 'H1', 'BBRI': 'D1', 'TLKM': 'D1'
-            };
-            const tf = tfMap[sym] || 'H1';
-            
-            const distMap = {
-              'EURUSD': 0.00150, 'GBPUSD': 0.00200, 'USDJPY': 0.25, 'XAUUSD': 8.00,
-              'AAPL': 2.00, 'TSLA': 3.50, 'BBRI': 50, 'TLKM': 30
-            };
-            const slDist = distMap[sym] || 0.01;
-            
-            const isNewBuy = Math.random() > 0.5;
-            const typeStr = isNewBuy ? 'BUY' : 'SELL';
-            
-            const rrrValStr = performanceData[sym]?.avgRrr || '1:2.0';
-            const newRrrParts = rrrValStr.split(':').map(Number);
-            const newRiskMultiplier = newRrrParts[1] || 2.0;
-            
-            const newSlNum = isNewBuy ? (currentLive - slDist) : (currentLive + slDist);
-            const newTpNum = isNewBuy ? (currentLive + slDist * newRiskMultiplier) : (currentLive - slDist * newRiskMultiplier);
-            
-            const decs = sym.includes('JPY') ? 2 : sym.includes('BBRI') || sym.includes('TLKM') ? 0 : 5;
-            
-            const baseWinRate = parseFloat(performanceData[sym]?.winRate || '68%');
-            const tradeProb = (baseWinRate + (Math.random() - 0.5) * 4).toFixed(1) + '%';
-            
-            const newTrade = {
-              id: Date.now() + Math.random(),
-              type: typeStr,
-              entry: currentLive.toFixed(decs),
-              sl: newSlNum.toFixed(decs),
-              tp: newTpNum.toFixed(decs),
-              timeframe: tf,
-              rrr: rrrValStr,
-              probability: tradeProb,
-              pnl: 'RUNNING (+0.00%)',
-              status: 'active',
-              time: 'Aktif'
-            };
-            
-            symbolLogs.unshift(newTrade);
+            if (currentPrice <= tpNum) {
+              shouldClose = true;
+              isWin = true;
+            } else if (currentPrice >= slNum) {
+              shouldClose = true;
+              isWin = false;
+            }
           }
+
+          if (!shouldClose && Math.random() < 0.05) {
+            shouldClose = true;
+            const runningProfit = trade.type === 'BUY'
+              ? ((currentPrice - entryNum) / entryNum) * 100
+              : ((entryNum - currentPrice) / entryNum) * 100;
+            isWin = runningProfit >= 0;
+            closeReason = 'AI Trailing Stop';
+          }
+
+          if (shouldClose) {
+            const rrrParts = trade.rrr.split(':').map(Number);
+            const riskMultiplier = rrrParts[1] || 2.0;
+            const pnlChange = isWin ? (0.20 * riskMultiplier) : -0.20;
+            
+            trade.pnl = isWin 
+              ? `PROFIT (+${(0.20 * riskMultiplier).toFixed(2)}%)` 
+              : `LOSS (-${(0.20).toFixed(2)}%)`;
+            trade.status = 'closed';
+            trade.time = `Selesai (${closeReason})`;
+
+            newLogs.push({
+              id: timestamp + Math.random(),
+              time: timeStr,
+              text: `[EKSEKUSI] Trade ${trade.symbol} (${trade.type}) ditutup pada harga ${currentPrice}. Hasil: ${trade.pnl}.`
+            });
+
+            const perf = db.performance[trade.symbol] || {};
+            const parsePct = (val) => parseFloat(val?.replace(/[+%]/g, '')) || 0;
+            const new1D = parsePct(perf.profit1D) + pnlChange;
+            const totalTr = parseInt(perf.totalTrades) || 0;
+            perf.profit1D = `${new1D >= 0 ? '+' : ''}${new1D.toFixed(2)}%`;
+            perf.totalTrades = `${totalTr + 1} Trades`;
+            db.performance[trade.symbol] = perf;
+          }
+        }
+        updatedTrades.push(trade);
+      }
+      db.trades = updatedTrades;
+
+      symbols.forEach((sym, index) => {
+        const hasActive = db.trades.some(t => t.symbol === sym && t.status === 'active');
+        if (hasActive) return;
+
+        const currentLive = livePrices[sym] || 1.0;
+        const symbolSeed = sym.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+
+        // Kurangi waktu secara berurutan agar log aset terdistribusi secara natural (drift 4 detik per aset)
+        const itemTimestamp = timestamp - (index * 4000);
+        const itemTimeStr = new Date(itemTimestamp).toLocaleString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB';
+
+        // A. HIGH TIMEFRAME (H1) - STRUKTUR TREN MACRO
+        const h1Wave = Math.sin(itemTimestamp / (3600 * 1000) + symbolSeed);
+        const h1Trend = h1Wave > 0.20 ? 'BULLISH' : h1Wave < -0.20 ? 'BEARISH' : 'SIDEWAYS';
+
+        // B. PILAR 1: SMART MONEY CONCEPTS (SMC) EMULATION
+        // 1. Liquidity Sweep (Sapu likuiditas swing ritel)
+        const sweepWave = Math.sin(itemTimestamp / (45 * 60 * 1000) + symbolSeed + 1);
+        const liqSweep = sweepWave > 0.65 ? 'BULLISH_SWEEP' : sweepWave < -0.65 ? 'BEARISH_SWEEP' : 'NONE';
+
+        // 2. Change of Character (CHoCH M15 - Peralihan struktur awal)
+        const chochWave = Math.sin(itemTimestamp / (30 * 60 * 1000) + symbolSeed + 2);
+        const hasCHoCH = chochWave > 0.35;
+
+        // 3. Mitigasi Order Block (OB M15 - Harga masuk ke demand/supply institusi)
+        const obWave = Math.sin(itemTimestamp / (15 * 60 * 1000) + symbolSeed + 3);
+        const priceInOrderBlock = obWave > 0.40;
+
+        // 4. Imbalance / Fair Value Gap (FVG M15)
+        const fvgWave = Math.sin(itemTimestamp / (10 * 60 * 1000) + symbolSeed + 4);
+        const fvgMitigated = fvgWave > 0.25;
+
+        // C. PILAR 2: SUPPLY & DEMAND (S&D) ZONES
+        const sdWave = Math.sin(itemTimestamp / (20 * 60 * 1000) + symbolSeed + 5);
+        const inDemandZone = sdWave > 0.45;  // Drop-Base-Rally Demand Zone
+        const inSupplyZone = sdWave < -0.45; // Rally-Base-Drop Supply Zone
+
+        // D. PILAR 3: HORIZONTAL SUPPORT & RESISTANCE (S&R) KEY LEVELS
+        const srWave = Math.sin(itemTimestamp / (12 * 60 * 1000) + symbolSeed + 6);
+        const atMajorSupport = srWave > 0.50;      // Klasik Support Level / RBS (Resistance Become Support)
+        const atMajorResistance = srWave < -0.50;  // Klasik Resistance Level / SBR (Support Become Resistance)
+
+        // E. KELAYAKAN & KONFLUENSI PROBABILITAS GABUNGAN
+        let probability = 35; // Baseline disiplin (hanya entri pada setup berkualitas tinggi)
+        let bias = 'NEUTRAL';
+        let executeTrade = false;
+        let tradeType = '';
+        let confluences = [];
+
+        if (h1Trend === 'BULLISH') {
+          bias = 'BUY ONLY (Tren H1 Bullish)';
           
-          nextLogs[sym] = symbolLogs;
-        });
-        
-        return nextLogs;
+          // 1. Konfluensi SMC
+          if (liqSweep === 'BULLISH_SWEEP') {
+            probability += 10;
+            confluences.push('SMC Liquidity Sweep');
+          }
+          if (hasCHoCH) {
+            probability += 10;
+            confluences.push('SMC M15 CHoCH');
+          }
+          if (priceInOrderBlock) {
+            probability += 10;
+            confluences.push('SMC Tapped Order Block (OB)');
+          }
+          if (fvgMitigated) {
+            probability += 10;
+            confluences.push('SMC FVG Fill');
+          }
+
+          // 2. Konfluensi Supply & Demand
+          if (inDemandZone) {
+            probability += 15;
+            confluences.push('S&D Demand Zone');
+          }
+
+          // 3. Konfluensi Support & Resistance Klasik
+          if (atMajorSupport) {
+            probability += 10;
+            confluences.push('S&R Key Support (RBS)');
+          }
+
+          // 4. Momentum Filter (RSI)
+          const m15Rsi = Math.round(50 + Math.sin(itemTimestamp / (15 * 60 * 1000) + symbolSeed + 7) * 20);
+          if (m15Rsi < 45) {
+            probability += 5;
+            confluences.push('RSI Pullback');
+          }
+
+          tradeType = 'BUY';
+          executeTrade = probability >= 70;
+        } else if (h1Trend === 'BEARISH') {
+          bias = 'SELL ONLY (Tren H1 Bearish)';
+
+          // 1. Konfluensi SMC
+          if (liqSweep === 'BEARISH_SWEEP') {
+            probability += 10;
+            confluences.push('SMC Liquidity Sweep');
+          }
+          if (hasCHoCH) {
+            probability += 10;
+            confluences.push('SMC M15 CHoCH');
+          }
+          if (priceInOrderBlock) {
+            probability += 10;
+            confluences.push('SMC Tapped Order Block (OB)');
+          }
+          if (fvgMitigated) {
+            probability += 10;
+            confluences.push('SMC FVG Fill');
+          }
+
+          // 2. Konfluensi Supply & Demand
+          if (inSupplyZone) {
+            probability += 15;
+            confluences.push('S&D Supply Zone');
+          }
+
+          // 3. Konfluensi Support & Resistance Klasik
+          if (atMajorResistance) {
+            probability += 10;
+            confluences.push('S&R Key Resistance (SBR)');
+          }
+
+          // 4. Momentum Filter (RSI)
+          const m15Rsi = Math.round(50 + Math.sin(itemTimestamp / (15 * 60 * 1000) + symbolSeed + 7) * 20);
+          if (m15Rsi > 55) {
+            probability += 5;
+            confluences.push('RSI Rally');
+          }
+
+          tradeType = 'SELL';
+          executeTrade = probability >= 70;
+        } else {
+          bias = 'NO TRADE (H1 Sideways)';
+          probability = Math.round(15 + Math.random() * 20);
+        }
+
+        probability = Math.min(98, Math.max(10, probability));
+
+        if (executeTrade) {
+          const distMap = {
+            'EURUSD': 0.00100, 'GBPUSD': 0.00150, 'USDJPY': 0.20, 'XAUUSD': 6.00,
+            'AAPL': 1.50, 'TSLA': 2.50, 'BBRI': 40, 'TLKM': 20
+          };
+          const slDist = distMap[sym] || 0.01;
+          const perf = db.performance[sym] || {};
+          const rrrValStr = perf.avgRrr || '1:2.3';
+          const rrrParts = rrrValStr.split(':').map(Number);
+          const riskMultiplier = rrrParts[1] || 2.3;
+
+          const newSl = tradeType === 'BUY' ? (currentLive - slDist) : (currentLive + slDist);
+          const newTp = tradeType === 'BUY' ? (currentLive + slDist * riskMultiplier) : (currentLive - slDist * riskMultiplier);
+          const decs = sym.includes('JPY') ? 2 : sym.includes('BBRI') || sym.includes('TLKM') ? 0 : 5;
+
+          const newTrade = {
+            id: itemTimestamp + Math.random(),
+            symbol: sym,
+            type: tradeType,
+            entry: currentLive.toFixed(decs),
+            sl: newSl.toFixed(decs),
+            tp: newTp.toFixed(decs),
+            timeframe: 'M5 (Confluence Set)',
+            rrr: rrrValStr,
+            probability: `${probability}%`,
+            pnl: 'RUNNING (+0.00%)',
+            status: 'active',
+            time: 'Aktif'
+          };
+
+          db.trades.unshift(newTrade);
+          newLogs.push({
+            id: itemTimestamp + Math.random(),
+            time: itemTimeStr,
+            text: `[KONFLUENS EKSEKUSI] Sinyal berkualitas tinggi terdeteksi untuk ${sym}! Tren H1: ${h1Trend}, Konfluensi Aktif: [${confluences.join(' + ')}]. Probabilitas: ${probability}%. Posisi ${tradeType} dibuka di harga ${currentLive.toFixed(decs)}.`
+          });
+        } else {
+          let logText = '';
+          if (bias.includes('NO TRADE')) {
+            logText = `[DISIPLIN] ${sym} dilewati. Tren H1 sedang Sideways (${bias}). Probabilitas hanya ${probability}%. Menunggu struktur bias tren terbentuk.`;
+          } else {
+            logText = `[DISIPLIN] ${sym} dilewati. Tren H1 selaras ${h1Trend}, namun tingkat konfluensi kurang memadai (Konfluensi aktif: [${confluences.join(' + ') || 'None'}]). Probabilitas ${probability}% (Batas minimal 70%).`;
+          }
+          newLogs.push({
+            id: itemTimestamp + Math.random(),
+            time: itemTimeStr,
+            text: logText
+          });
+        }
       });
-    }, 3000);
-    
-    return () => clearInterval(interval);
-  }, [performanceData, livePrices]);
+
+      const updatedLogs = [...newLogs, ...db.logs].slice(0, 50);
+      const newBotLogs = {};
+      symbols.forEach(sym => {
+        newBotLogs[sym] = db.trades.filter(t => t.symbol === sym);
+      });
+
+      setBotLogs(newBotLogs);
+      setPerformanceData(db.performance);
+      setGeneralLogs(updatedLogs);
+
+      localStorage.setItem('local_trading_db', JSON.stringify({
+        botLogs: newBotLogs,
+        performance: db.performance,
+        logs: updatedLogs
+      }));
+    } finally {
+      setIsTriggering(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'trading') {
+      fetchBackendTrades();
+      const interval = setInterval(fetchBackendTrades, 5000); // Poll every 5s
+      return () => clearInterval(interval);
+    }
+  }, [activeTab, fetchBackendTrades]);
+
+  // Real-time reactive SL/TP evaluator based on live TradingView rates
+  useEffect(() => {
+    const symbols = ['EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD', 'AAPL', 'TSLA', 'BBRI', 'TLKM'];
+    let triggerScanNeeded = false;
+
+    for (let sym of symbols) {
+      const symTrades = botLogs[sym] || [];
+      const activeTrade = symTrades.find(t => t.status === 'active');
+      if (activeTrade) {
+        const currentLive = livePrices[sym];
+        if (currentLive) {
+          const slNum = parseFloat(activeTrade.sl);
+          const tpNum = parseFloat(activeTrade.tp);
+
+          if (activeTrade.type === 'BUY') {
+            if (currentLive >= tpNum || currentLive <= slNum) {
+              triggerScanNeeded = true;
+              break;
+            }
+          } else { // SELL
+            if (currentLive <= tpNum || currentLive >= slNum) {
+              triggerScanNeeded = true;
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    if (triggerScanNeeded && !isTriggering) {
+      console.log('Real-time boundary cross terdeteksi dari feed harga TradingView! Mengeksekusi penutupan posisi...');
+      triggerManualBotScan();
+    }
+  }, [livePrices, botLogs, isTriggering]);
 
   const exportToCSV = () => {
     const logs = botLogs[selectedSymbol] || [];
@@ -1204,6 +1401,148 @@ INSTRUKSI PENTING:
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const exportAllToCSV = () => {
+    const allLogs = [];
+    const symbols = Object.keys(botLogs);
+    
+    symbols.forEach(sym => {
+      const logs = botLogs[sym] || [];
+      logs.forEach(log => {
+        allLogs.push({ ...log, symbol: sym });
+      });
+    });
+
+    if (allLogs.length === 0) {
+      alert('Belum ada data untuk diunduh.');
+      return;
+    }
+
+    // Urutkan berdasarkan ID/waktu dari yang terbaru
+    allLogs.sort((a, b) => b.id - a.id);
+
+    const headers = ['Aset', 'Waktu', 'Aksi', 'Timeframe', 'Harga Entry', 'Risk-Reward', 'Probabilitas', 'Harga SL', 'Harga TP', 'Hasil PnL', 'Status'];
+    const rows = allLogs.map(log => [
+      log.symbol,
+      log.time,
+      log.type,
+      log.timeframe || 'M15',
+      log.entry,
+      log.rrr,
+      log.probability || '-',
+      log.sl || '-',
+      log.tp || '-',
+      log.pnl,
+      log.status
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `Semua_Laporan_Trading_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const stopTradingAndCloseAll = () => {
+    // Ambil database lokal ter-update
+    let localDb = { trades: [], logs: [], performance: {} };
+    try {
+      const saved = localStorage.getItem('local_trading_db');
+      if (saved) localDb = JSON.parse(saved);
+    } catch (e) {
+      console.error(e);
+    }
+
+    // Gunakan state aktif kita sebagai fallback utama
+    const symbolsList = ['EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD', 'AAPL', 'TSLA', 'BBRI', 'TLKM'];
+    let currentTrades = [];
+    
+    // Gabungkan data trades dari botLogs
+    symbolsList.forEach(sym => {
+      const symTrades = botLogs[sym] || [];
+      currentTrades = [...currentTrades, ...symTrades];
+    });
+
+    if (currentTrades.length === 0 && localDb.trades) {
+      currentTrades = [...localDb.trades];
+    }
+
+    let closedCount = 0;
+    const timeStr = new Date().toLocaleString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB';
+
+    const updatedTrades = currentTrades.map(trade => {
+      if (trade.status === 'active') {
+        closedCount++;
+        // Hitung running profit sementara berdasarkan live price saat ini
+        const currentPrice = livePrices[trade.symbol] || parseFloat(trade.entry);
+        const entryNum = parseFloat(trade.entry);
+        const runningPct = trade.type === 'BUY'
+          ? ((currentPrice - entryNum) / entryNum) * 100
+          : ((entryNum - currentPrice) / entryNum) * 100;
+
+        return {
+          ...trade,
+          status: 'closed',
+          time: 'Ditutup Manual',
+          pnl: `MANUAL CLOSE (${runningPct >= 0 ? '+' : ''}${runningPct.toFixed(2)}%)`
+        };
+      }
+      return trade;
+    });
+
+    if (closedCount === 0) {
+      alert('Tidak ada posisi aktif yang perlu ditutup.');
+      return;
+    }
+
+    const newLog = {
+      id: Date.now(),
+      time: timeStr,
+      text: `[SISTEM] PEMBERHENTIAN MANUAL: Trading dihentikan. Sebanyak ${closedCount} posisi aktif berhasil ditutup secara paksa.`
+    };
+
+    const updatedLogsList = [newLog, ...generalLogs].slice(0, 50);
+
+    // Update state frontend
+    const newBotLogs = {};
+    symbolsList.forEach(sym => {
+      newBotLogs[sym] = updatedTrades.filter(t => t.symbol === sym);
+    });
+
+    setBotLogs(newBotLogs);
+    setGeneralLogs(updatedLogsList);
+
+    // Simpan ke local storage
+    localStorage.setItem('local_trading_db', JSON.stringify({
+      botLogs: newBotLogs,
+      performance: performanceData,
+      logs: updatedLogsList
+    }));
+
+    // Coba kirim sinyal stop/close ke backend juga jika backend aktif
+    fetch('/api/trading-bot', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'close_all' })
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        console.log('Backend sync successful:', data.message);
+      }
+    })
+    .catch(e => console.warn('Backend offline/unreachable, status ditutup secara lokal saja:', e.message));
+
+    alert(`Berhasil menghentikan trading! ${closedCount} posisi aktif ditutup secara manual.`);
   };
 
   if (loading && !prayerSchedule && !weather) {
@@ -1929,21 +2268,44 @@ INSTRUKSI PENTING:
 
                 {/* Algorithmic Bot Simulation Log */}
                 <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
-                  <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                  <div className="px-6 py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3 bg-slate-50/50">
                     <span className="text-xs font-bold text-slate-800 flex items-center gap-2 text-left">
-                      ⚡ Simulasi Eksekusi Algoritma Bot ({selectedSymbol})
+                      ⚡ Eksekusi Posisi & Histori Transaksi ({selectedSymbol})
                     </span>
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <button 
+                        onClick={triggerManualBotScan}
+                        disabled={isTriggering}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-white rounded-lg text-[10px] font-extrabold tracking-wide uppercase transition-all shadow-sm active:scale-95"
+                      >
+                        {isTriggering ? (
+                          <span className="w-3 h-3 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                        ) : '⚡ Pemicu Manual Bot'}
+                      </button>
                       <button 
                         onClick={exportToCSV}
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-[10px] font-extrabold tracking-wide uppercase transition-colors"
+                        title="Unduh data trading untuk aset yang sedang aktif dipilih saja"
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-download"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-                        Unduh Laporan (CSV)
+                        Unduh Aset Aktif
                       </button>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider hidden sm:block">
-                        Live Trading Logs
-                      </span>
+                      <button 
+                        onClick={exportAllToCSV}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-[10px] font-extrabold tracking-wide uppercase transition-colors"
+                        title="Unduh seluruh data trading gabungan untuk semua aset"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-download"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                        Unduh Semua Aset
+                      </button>
+                      <button 
+                        onClick={stopTradingAndCloseAll}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-[10px] font-extrabold tracking-wide uppercase transition-colors active:scale-95"
+                        title="Tutup semua transaksi aktif saat ini secara paksa dan hentikan perdagangan sementara"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-octagon-alert"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12" y1="16" y2="16"/></svg>
+                        🔴 Stop & Tutup Semua
+                      </button>
                     </div>
                   </div>
                   <div className="overflow-x-auto">
@@ -1987,10 +2349,7 @@ INSTRUKSI PENTING:
                                     <span className="text-[9px] text-amber-600 font-bold uppercase tracking-wider">Harga Realtime</span>
                                     <p className="text-amber-600 font-extrabold text-xs animate-pulse leading-none mt-0.5">
                                       {(() => {
-                                        const baseLive = parseFloat(livePrices[selectedSymbol] || log.entry);
-                                        // Fluctuates in perfect mathematical lockstep with floating PnL
-                                        const pnlWave = Math.sin(Date.now() / 2000) * 0.0012;
-                                        const tickPrice = log.type === 'BUY' ? baseLive * (1 + pnlWave) : baseLive * (1 - pnlWave);
+                                        const tickPrice = parseFloat(livePrices[selectedSymbol] || log.entry);
                                         const decs = selectedSymbol.includes('JPY') ? 2 : selectedSymbol.includes('BBRI') || selectedSymbol.includes('TLKM') ? 0 : 5;
                                         return tickPrice.toFixed(decs);
                                       })()}
@@ -2026,7 +2385,14 @@ INSTRUKSI PENTING:
                                     : 'text-amber-500 font-bold animate-pulse'
                               }`}>
                                 {log.status === 'active' 
-                                  ? `RUNNING (${(Math.sin(Date.now() / 2000) * 0.12 + (log.type === 'BUY' ? 0.04 : -0.04)).toFixed(2)}%)` 
+                                  ? (() => {
+                                      const entryNum = parseFloat(log.entry);
+                                      const liveNum = parseFloat(livePrices[selectedSymbol] || log.entry);
+                                      const pnlPercent = log.type === 'BUY'
+                                        ? ((liveNum - entryNum) / entryNum) * 100
+                                        : ((entryNum - liveNum) / entryNum) * 100;
+                                      return `RUNNING (${pnlPercent >= 0 ? '+' : ''}${pnlPercent.toFixed(2)}%)`;
+                                    })()
                                   : log.pnl}
                               </span>
                             </td>
@@ -2034,6 +2400,53 @@ INSTRUKSI PENTING:
                         ))}
                       </tbody>
                     </table>
+                  </div>
+                </div>
+
+                {/* Buku Log Disiplin Bot (24/7 Activity Logs) */}
+                <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm p-6 text-left space-y-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 bg-slate-50 text-slate-600 border border-slate-200/60 rounded-xl flex items-center justify-center flex-shrink-0">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-shield-alert text-slate-500"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12" y1="16" y2="16"/></svg>
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-bold text-slate-800">🛡️ Buku Log Disiplin Bot 24/7</h3>
+                        <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Aktivitas Real-time & Alasan Lewati Peluang</p>
+                      </div>
+                    </div>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50 border px-2.5 py-1 rounded-md animate-pulse">
+                      SINKRONISASI AKTIF
+                    </span>
+                  </div>
+
+                  <div className="max-h-60 overflow-y-auto space-y-2.5 pr-2 font-mono scroll-smooth">
+                    {generalLogs.length === 0 ? (
+                      <p className="text-slate-300 text-xs font-light text-center py-6">Belum ada aktivitas log tercatat...</p>
+                    ) : (
+                      generalLogs.map((log) => {
+                        const isDiscipline = log.text.includes('[DISIPLIN]');
+                        const isExecution = log.text.includes('[EKSEKUSI]');
+                        
+                        return (
+                          <div key={log.id} className="text-xs p-3 rounded-xl border border-slate-100/60 bg-slate-50/50 flex flex-col sm:flex-row gap-2 leading-relaxed">
+                            <span className="text-[10px] font-bold text-slate-400 flex-shrink-0 sm:w-28">{log.time}</span>
+                            <div className="flex-1">
+                              <span className={`inline-block mr-2 px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wide ${
+                                isDiscipline 
+                                  ? 'bg-amber-50 text-amber-700 border border-amber-100' 
+                                  : isExecution 
+                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                                    : 'bg-slate-100 text-slate-600 border border-slate-200'
+                              }`}>
+                                {isDiscipline ? 'DISIPLIN' : isExecution ? 'EKSEKUSI' : 'SISTEM'}
+                              </span>
+                              <span className="text-slate-600 font-semibold">{log.text.replace(/\[DISIPLIN\]|\[EKSEKUSI\]|\[SISTEM\]/, '').trim()}</span>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
                 </div>
 
