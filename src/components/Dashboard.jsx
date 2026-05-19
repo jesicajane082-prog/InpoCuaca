@@ -976,6 +976,23 @@ INSTRUKSI PENTING:
 
   const [generalLogs, setGeneralLogs] = useState([]);
   const [isTriggering, setIsTriggering] = useState(false);
+  const [activeTradingTab, setActiveTradingTab] = useState('live'); // 'live' or 'backtest'
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [botSettings, setBotSettings] = useState({
+    minProbability: 70,
+    riskRewardRatio: 2.3,
+    activeSymbols: ['EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD', 'AAPL', 'TSLA', 'BBRI', 'TLKM']
+  });
+
+  // Backtest States
+  const [backtestSettings, setBacktestSettings] = useState({
+    symbol: 'EURUSD',
+    period: 30, // 30 days
+    minProbability: 70,
+    riskRewardRatio: 2.3
+  });
+  const [backtestResults, setBacktestResults] = useState(null);
+  const [isBacktesting, setIsBacktesting] = useState(false);
 
   const fetchBackendTrades = useCallback(async () => {
     try {
@@ -991,6 +1008,9 @@ INSTRUKSI PENTING:
         setBotLogs(data.botLogs || {});
         setPerformanceData(data.performance || {});
         setGeneralLogs(data.logs || []);
+        if (data.settings) {
+          setBotSettings(data.settings);
+        }
       }
     } catch (e) {
       console.warn('Gagal memuat log bot backend, beralih ke Emulator Lokal Frontend:', e.message);
@@ -1002,6 +1022,9 @@ INSTRUKSI PENTING:
           setBotLogs(parsed.botLogs || {});
           setPerformanceData(parsed.performance || {});
           setGeneralLogs(parsed.logs || []);
+          if (parsed.settings) {
+            setBotSettings(parsed.settings);
+          }
           return;
         } catch (err) {}
       }
@@ -1039,7 +1062,9 @@ INSTRUKSI PENTING:
       };
 
       const symbols = ['EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD', 'AAPL', 'TSLA', 'BBRI', 'TLKM'];
+      const activeSymbols = botSettings.activeSymbols || symbols;
       symbols.forEach(sym => {
+        if (!activeSymbols.includes(sym)) return;
         const symTrades = botLogs[sym] || [];
         db.trades.push(...symTrades);
       });
@@ -1155,6 +1180,7 @@ INSTRUKSI PENTING:
       db.trades = updatedTrades;
 
       symbols.forEach((sym, index) => {
+        if (!activeSymbols.includes(sym)) return;
         const hasActive = db.trades.some(t => t.symbol === sym && t.status === 'active');
         if (hasActive) return;
 
@@ -1244,7 +1270,7 @@ INSTRUKSI PENTING:
           }
 
           tradeType = 'BUY';
-          executeTrade = probability >= 70;
+          executeTrade = probability >= (botSettings.minProbability || 70);
         } else if (h1Trend === 'BEARISH') {
           bias = 'SELL ONLY (Tren H1 Bearish)';
 
@@ -1286,7 +1312,7 @@ INSTRUKSI PENTING:
           }
 
           tradeType = 'SELL';
-          executeTrade = probability >= 70;
+          executeTrade = probability >= (botSettings.minProbability || 70);
         } else {
           bias = 'NO TRADE (H1 Sideways)';
           probability = Math.round(15 + Math.random() * 20);
@@ -1300,10 +1326,8 @@ INSTRUKSI PENTING:
             'AAPL': 1.50, 'TSLA': 2.50, 'BBRI': 40, 'TLKM': 20
           };
           const slDist = distMap[sym] || 0.01;
-          const perf = db.performance[sym] || {};
-          const rrrValStr = perf.avgRrr || '1:2.3';
-          const rrrParts = rrrValStr.split(':').map(Number);
-          const riskMultiplier = rrrParts[1] || 2.3;
+          const rrrValStr = `1:${botSettings.riskRewardRatio || 2.3}`;
+          const riskMultiplier = botSettings.riskRewardRatio || 2.3;
 
           const newSl = tradeType === 'BUY' ? (currentLive - slDist) : (currentLive + slDist);
           const newTp = tradeType === 'BUY' ? (currentLive + slDist * riskMultiplier) : (currentLive - slDist * riskMultiplier);
@@ -1335,7 +1359,7 @@ INSTRUKSI PENTING:
           if (bias.includes('NO TRADE')) {
             logText = `[DISIPLIN] ${sym} dilewati. Tren H1 sedang Sideways (${bias}). Probabilitas hanya ${probability}%. Menunggu struktur bias tren terbentuk.`;
           } else {
-            logText = `[DISIPLIN] ${sym} dilewati. Tren H1 selaras ${h1Trend}, namun tingkat konfluensi kurang memadai (Konfluensi aktif: [${confluences.join(' + ') || 'None'}]). Probabilitas ${probability}% (Batas minimal 70%).`;
+            logText = `[DISIPLIN] ${sym} dilewati. Tren H1 selaras ${h1Trend}, namun tingkat konfluensi kurang memadai (Konfluensi aktif: [${confluences.join(' + ') || 'None'}]). Probabilitas ${probability}% (Batas minimal ${(botSettings.minProbability || 70)}%).`;
           }
           newLogs.push({
             id: itemTimestamp + Math.random(),
@@ -1363,6 +1387,261 @@ INSTRUKSI PENTING:
     } finally {
       setIsTriggering(false);
     }
+  };
+
+  const saveBotSettings = async (newSettings) => {
+    try {
+      setBotSettings(newSettings);
+      const res = await fetch('/api/trading-bot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update_settings',
+          ...newSettings
+        })
+      });
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.error || 'Gagal menyimpan pengaturan ke database backend');
+      }
+    } catch (e) {
+      console.warn('Gagal menyimpan pengaturan ke backend, menyimpan di Emulator Lokal:', e.message);
+      const savedData = localStorage.getItem('local_trading_db');
+      let db = { trades: [], logs: [], performance: {}, settings: {} };
+      if (savedData) {
+        try { db = JSON.parse(savedData); } catch (err) {}
+      }
+      db.settings = newSettings;
+      localStorage.setItem('local_trading_db', JSON.stringify(db));
+    }
+  };
+
+  const runBacktestSimulation = () => {
+    setIsBacktesting(true);
+    setBacktestResults(null);
+
+    setTimeout(() => {
+      try {
+        const { symbol, period, minProbability, riskRewardRatio } = backtestSettings;
+        const symbolSeed = symbol.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+        let price = livePrices[symbol] || (symbol.includes('JPY') ? 156.00 : symbol.includes('BBRI') ? 4700 : symbol.includes('XAU') ? 2400.00 : 1.0850);
+        
+        const intervals = period * 24 * 4; // M15 intervals
+        const startTime = Date.now() - (period * 24 * 3600 * 1000);
+        const candles = [];
+        
+        for (let i = 0; i < intervals; i++) {
+          const time = startTime + (i * 15 * 60 * 1000);
+          const drift = Math.sin(time / (24 * 3600 * 1000) + symbolSeed) * 0.0002;
+          const noise = (Math.random() - 0.5) * 0.0015;
+          price = price * (1 + drift + noise);
+          candles.push({ time, price });
+        }
+
+        const trades = [];
+        let activeTrade = null;
+        let balance = 100.0;
+        const equityCurve = [{ time: startTime, balance: 100.0 }];
+        
+        const distMap = {
+          'EURUSD': 0.00100, 'GBPUSD': 0.00150, 'USDJPY': 0.20, 'XAUUSD': 6.00,
+          'AAPL': 1.50, 'TSLA': 2.50, 'BBRI': 40, 'TLKM': 20
+        };
+        const slDist = distMap[symbol] || 0.01;
+        const decs = symbol.includes('JPY') ? 2 : symbol.includes('BBRI') || symbol.includes('TLKM') ? 0 : 5;
+
+        for (let i = 0; i < candles.length; i++) {
+          const candle = candles[i];
+          const timeStr = new Date(candle.time).toLocaleString('id-ID', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) + ' WIB';
+
+          if (activeTrade) {
+            if (!activeTrade.isBE) {
+              const entry = parseFloat(activeTrade.entry);
+              const tp = parseFloat(activeTrade.tp);
+              if (activeTrade.type === 'BUY') {
+                const triggerLevel = entry + (tp - entry) * 0.5;
+                if (candle.price >= triggerLevel) {
+                  activeTrade.sl = entry;
+                  activeTrade.isBE = true;
+                }
+              } else {
+                const triggerLevel = entry - (entry - tp) * 0.5;
+                if (candle.price <= triggerLevel) {
+                  activeTrade.sl = entry;
+                  activeTrade.isBE = true;
+                }
+              }
+            }
+
+            let shouldClose = false;
+            let pnlChange = 0;
+            let resultStatus = '';
+            
+            const entryVal = parseFloat(activeTrade.entry);
+            const slVal = parseFloat(activeTrade.sl);
+            const tpVal = parseFloat(activeTrade.tp);
+
+            if (activeTrade.type === 'BUY') {
+              if (candle.price >= tpVal) {
+                shouldClose = true;
+                pnlChange = 0.20 * riskRewardRatio;
+                resultStatus = 'PROFIT';
+              } else if (candle.price <= slVal) {
+                shouldClose = true;
+                pnlChange = activeTrade.isBE ? 0 : -0.20;
+                resultStatus = activeTrade.isBE ? 'BREAK EVEN' : 'LOSS';
+              }
+            } else {
+              if (candle.price <= tpVal) {
+                shouldClose = true;
+                pnlChange = 0.20 * riskRewardRatio;
+                resultStatus = 'PROFIT';
+              } else if (candle.price >= slVal) {
+                shouldClose = true;
+                pnlChange = activeTrade.isBE ? 0 : -0.20;
+                resultStatus = activeTrade.isBE ? 'BREAK EVEN' : 'LOSS';
+              }
+            }
+
+            if (shouldClose) {
+              balance += pnlChange;
+              activeTrade.pnl = resultStatus === 'PROFIT' 
+                ? `PROFIT (+${(0.20 * riskRewardRatio).toFixed(2)}%)` 
+                : resultStatus === 'BREAK EVEN' ? 'BREAK EVEN (+0.00%)' : `LOSS (-0.20%)`;
+              activeTrade.status = 'closed';
+              activeTrade.closePrice = candle.price.toFixed(decs);
+              activeTrade.closeTime = timeStr;
+              
+              trades.unshift(activeTrade);
+              equityCurve.push({ time: candle.time, balance: parseFloat(balance.toFixed(2)) });
+              activeTrade = null;
+            }
+          } else {
+            const h1Wave = Math.sin(candle.time / (3600 * 1000) + symbolSeed);
+            const h1Trend = h1Wave > 0.20 ? 'BULLISH' : h1Wave < -0.20 ? 'BEARISH' : 'SIDEWAYS';
+            
+            if (h1Trend !== 'SIDEWAYS') {
+              const sweepWave = Math.sin(candle.time / (45 * 60 * 1000) + symbolSeed + 1);
+              const liqSweep = sweepWave > 0.65 ? 'BULLISH_SWEEP' : sweepWave < -0.65 ? 'BEARISH_SWEEP' : 'NONE';
+              const chochWave = Math.sin(candle.time / (30 * 60 * 1000) + symbolSeed + 2);
+              const hasCHoCH = chochWave > 0.35;
+              const obWave = Math.sin(candle.time / (15 * 60 * 1000) + symbolSeed + 3);
+              const priceInOrderBlock = obWave > 0.40;
+              const fvgWave = Math.sin(candle.time / (10 * 60 * 1000) + symbolSeed + 4);
+              const fvgMitigated = fvgWave > 0.25;
+              
+              const sdWave = Math.sin(candle.time / (20 * 60 * 1000) + symbolSeed + 5);
+              const inDemandZone = sdWave > 0.45;
+              const inSupplyZone = sdWave < -0.45;
+              
+              const srWave = Math.sin(candle.time / (12 * 60 * 1000) + symbolSeed + 6);
+              const atMajorSupport = srWave > 0.50;
+              const atMajorResistance = srWave < -0.50;
+
+              let prob = 35;
+              let confluences = [];
+
+              if (h1Trend === 'BULLISH') {
+                if (liqSweep === 'BULLISH_SWEEP') { prob += 10; confluences.push('SMC Liquidity Sweep'); }
+                if (hasCHoCH) { prob += 10; confluences.push('SMC M15 CHoCH'); }
+                if (priceInOrderBlock) { prob += 10; confluences.push('SMC OB'); }
+                if (fvgMitigated) { prob += 10; confluences.push('SMC FVG'); }
+                if (inDemandZone) { prob += 15; confluences.push('S&D Demand'); }
+                if (atMajorSupport) { prob += 10; confluences.push('S&R Support'); }
+                
+                const m15Rsi = Math.round(50 + Math.sin(candle.time / (15 * 60 * 1000) + symbolSeed + 7) * 20);
+                if (m15Rsi < 45) { prob += 5; confluences.push('RSI Pullback'); }
+
+                if (prob >= minProbability) {
+                  const entry = candle.price;
+                  const sl = entry - slDist;
+                  const tp = entry + slDist * riskRewardRatio;
+                  activeTrade = {
+                    id: Math.random(),
+                    symbol,
+                    type: 'BUY',
+                    entry: entry.toFixed(decs),
+                    sl: sl.toFixed(decs),
+                    tp: tp.toFixed(decs),
+                    rrr: `1:${riskRewardRatio}`,
+                    probability: `${prob}%`,
+                    status: 'active',
+                    openTime: timeStr,
+                    confluences: confluences.join(' + '),
+                    isBE: false
+                  };
+                }
+              } else if (h1Trend === 'BEARISH') {
+                if (liqSweep === 'BEARISH_SWEEP') { prob += 10; confluences.push('SMC Liquidity Sweep'); }
+                if (hasCHoCH) { prob += 10; confluences.push('SMC M15 CHoCH'); }
+                if (priceInOrderBlock) { prob += 10; confluences.push('SMC OB'); }
+                if (fvgMitigated) { prob += 10; confluences.push('SMC FVG'); }
+                if (inSupplyZone) { prob += 15; confluences.push('S&D Supply'); }
+                if (atMajorResistance) { prob += 10; confluences.push('S&R Resistance'); }
+                
+                const m15Rsi = Math.round(50 + Math.sin(candle.time / (15 * 60 * 1000) + symbolSeed + 7) * 20);
+                if (m15Rsi > 55) { prob += 5; confluences.push('RSI Rally'); }
+
+                if (prob >= minProbability) {
+                  const entry = candle.price;
+                  const sl = entry + slDist;
+                  const tp = entry - slDist * riskRewardRatio;
+                  activeTrade = {
+                    id: Math.random(),
+                    symbol,
+                    type: 'SELL',
+                    entry: entry.toFixed(decs),
+                    sl: sl.toFixed(decs),
+                    tp: tp.toFixed(decs),
+                    rrr: `1:${riskRewardRatio}`,
+                    probability: `${prob}%`,
+                    status: 'active',
+                    openTime: timeStr,
+                    confluences: confluences.join(' + '),
+                    isBE: false
+                  };
+                }
+              }
+            }
+          }
+        }
+
+        const totalTrades = trades.length;
+        const profitTrades = trades.filter(t => t.pnl.includes('PROFIT'));
+        const lossTrades = trades.filter(t => t.pnl.includes('LOSS'));
+        const beTrades = trades.filter(t => t.pnl.includes('BREAK EVEN'));
+        
+        const wins = profitTrades.length;
+        const losses = lossTrades.length;
+        const winRate = totalTrades > 0 ? ((wins / (wins + losses)) * 100).toFixed(1) : '0';
+        
+        const finalReturn = balance - 100.0;
+        
+        let peak = 100.0;
+        let maxDd = 0.0;
+        for (let eq of equityCurve) {
+          if (eq.balance > peak) peak = eq.balance;
+          const dd = ((peak - eq.balance) / peak) * 100;
+          if (dd > maxDd) maxDd = dd;
+        }
+
+        setBacktestResults({
+          totalTrades,
+          wins,
+          losses,
+          beTrades: beTrades.length,
+          winRate,
+          finalReturn: `${finalReturn >= 0 ? '+' : ''}${finalReturn.toFixed(2)}%`,
+          maxDrawdown: `${maxDd.toFixed(2)}%`,
+          trades,
+          equityCurve
+        });
+      } catch (err) {
+        console.error('Backtest error:', err);
+      } finally {
+        setIsBacktesting(false);
+      }
+    }, 1200);
   };
 
   useEffect(() => {
@@ -2243,16 +2522,48 @@ INSTRUKSI PENTING:
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => setIsSettingsOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200/80 border border-slate-200 text-slate-600 rounded-lg text-[10px] font-extrabold tracking-wide uppercase transition-colors"
+                >
+                  ⚙️ Set Parameter Bot
+                </button>
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50 px-3 py-1.5 border border-slate-100 rounded-lg animate-pulse">
                   ⚡ STATUS BOT: AKTIF
                 </span>
               </div>
             </div>
 
-            {/* Selector Symbol Pills */}
-            <div className="flex flex-col gap-3">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wide text-left">Pilih Aset Perdagangan</span>
-              <div className="flex flex-wrap gap-2">
+            {/* Sub-Tabs: Live Trading vs Backtesting */}
+            <div className="flex border-b border-slate-100">
+              <button
+                onClick={() => setActiveTradingTab('live')}
+                className={`pb-3 px-6 text-xs font-bold transition-all relative ${
+                  activeTradingTab === 'live'
+                    ? 'text-slate-900 border-b-2 border-slate-900'
+                    : 'text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                🔴 Live Trading & Scan Real-time
+              </button>
+              <button
+                onClick={() => setActiveTradingTab('backtest')}
+                className={`pb-3 px-6 text-xs font-bold transition-all relative ${
+                  activeTradingTab === 'backtest'
+                    ? 'text-slate-900 border-b-2 border-slate-900'
+                    : 'text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                📊 Backtesting Strategi (Histori)
+              </button>
+            </div>
+
+            {activeTradingTab === 'live' ? (
+              <>
+                {/* Selector Symbol Pills */}
+                <div className="flex flex-col gap-3">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wide text-left">Pilih Aset Perdagangan</span>
+                  <div className="flex flex-wrap gap-2">
                 {[
                   { id: 'EURUSD', label: '🇪🇺🇺🇸 EUR/USD', type: 'Forex' },
                   { id: 'GBPUSD', label: '🇬🇧🇺🇸 GBP/USD', type: 'Forex' },
@@ -2608,8 +2919,253 @@ INSTRUKSI PENTING:
 
               </div>
             </div>
-          </motion.div>
+          </>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 text-left animate-in fade-in slide-in-from-bottom-2 duration-300">
+            {/* Settings Panel */}
+            <div className="lg:col-span-4 bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-5 h-fit">
+              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                <span>⚡ Parameter Backtest</span>
+              </h3>
+              
+              <div className="space-y-4">
+                {/* Symbol */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Pilih Aset</label>
+                  <select
+                    value={backtestSettings.symbol}
+                    onChange={(e) => setBacktestSettings(prev => ({ ...prev, symbol: e.target.value }))}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none"
+                  >
+                    <option value="EURUSD">🇪🇺🇺🇸 EUR/USD</option>
+                    <option value="GBPUSD">🇬🇧🇺🇸 GBP/USD</option>
+                    <option value="USDJPY">🇺🇸🇯🇵 USD/JPY</option>
+                    <option value="XAUUSD">🏆🇺🇸 XAU/USD (Gold)</option>
+                    <option value="BBRI">🏦🇮🇩 BBRI (IDX)</option>
+                    <option value="TLKM">📞🇮🇩 TLKM (IDX)</option>
+                    <option value="AAPL">🍎🇺🇸 AAPL (US)</option>
+                    <option value="TSLA">⚡🇺🇸 TSLA (US)</option>
+                  </select>
+                </div>
+
+                {/* Period */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex justify-between">
+                    <span>Periode Simulasi</span>
+                    <span className="text-slate-700">{backtestSettings.period} Hari</span>
+                  </label>
+                  <input
+                    type="range"
+                    min="7"
+                    max="60"
+                    value={backtestSettings.period}
+                    onChange={(e) => setBacktestSettings(prev => ({ ...prev, period: parseInt(e.target.value) }))}
+                    className="w-full accent-slate-900 cursor-pointer"
+                  />
+                </div>
+
+                {/* Probability */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex justify-between">
+                    <span>Min. Probabilitas Setup</span>
+                    <span className="text-slate-700">{backtestSettings.minProbability}%</span>
+                  </label>
+                  <input
+                    type="range"
+                    min="40"
+                    max="90"
+                    value={backtestSettings.minProbability}
+                    onChange={(e) => setBacktestSettings(prev => ({ ...prev, minProbability: parseInt(e.target.value) }))}
+                    className="w-full accent-slate-900 cursor-pointer"
+                  />
+                </div>
+
+                {/* RRR */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex justify-between">
+                    <span>Risk-to-Reward Ratio</span>
+                    <span className="text-slate-700">1 : {backtestSettings.riskRewardRatio}</span>
+                  </label>
+                  <input
+                    type="range"
+                    min="1.0"
+                    max="4.0"
+                    step="0.1"
+                    value={backtestSettings.riskRewardRatio}
+                    onChange={(e) => setBacktestSettings(prev => ({ ...prev, riskRewardRatio: parseFloat(e.target.value) }))}
+                    className="w-full accent-slate-900 cursor-pointer"
+                  />
+                </div>
+              </div>
+
+              <button
+                onClick={runBacktestSimulation}
+                disabled={isBacktesting}
+                className="w-full py-3 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:scale-100 text-white text-xs font-bold rounded-xl active:scale-95 transition-all flex items-center justify-center gap-2 shadow-sm"
+              >
+                {isBacktesting ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <span>Menganalisa Histori...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>⚡ Jalankan Backtesting</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Results Panel */}
+            <div className="lg:col-span-8 space-y-6">
+              {isBacktesting && (
+                <div className="bg-white border border-slate-200 rounded-3xl p-12 shadow-sm text-center flex flex-col items-center justify-center space-y-4">
+                  <div className="w-12 h-12 rounded-full border-4 border-slate-100 border-t-slate-900 animate-spin" />
+                  <div className="space-y-1">
+                    <h4 className="text-sm font-bold text-slate-800">Menjalankan Simulasi Confluence Strategi</h4>
+                    <p className="text-xs text-slate-400 max-w-sm">Membaca data lilin (candle) historis dan menguji tingkat kemenangan (win rate) strategi Break-Even...</p>
+                  </div>
+                </div>
+              )}
+
+              {!isBacktesting && !backtestResults && (
+                <div className="bg-white border border-slate-200 rounded-3xl p-12 shadow-sm text-center flex flex-col items-center justify-center space-y-3">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-play w-10 h-10 text-slate-300 mx-auto"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+                  <h4 className="text-sm font-bold text-slate-700">Simulator Siap Dijalankan</h4>
+                  <p className="text-xs text-slate-400 max-w-sm mx-auto">Sesuaikan parameter bot di sebelah kiri, kemudian klik tombol untuk memulai simulasi pengujian strategi.</p>
+                </div>
+              )}
+
+              {!isBacktesting && backtestResults && (
+                <>
+                  {/* Metric Dashboard */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm text-left">
+                      <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Net Return %</p>
+                      <p className={`text-2xl font-extrabold mt-1 ${backtestResults.finalReturn.includes('-') ? 'text-rose-500' : 'text-emerald-600'}`}>
+                        {backtestResults.finalReturn}
+                      </p>
+                    </div>
+                    <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm text-left">
+                      <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Win Rate %</p>
+                      <p className="text-2xl font-extrabold text-slate-800 mt-1">{backtestResults.winRate}%</p>
+                    </div>
+                    <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm text-left">
+                      <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Total Trades</p>
+                      <p className="text-2xl font-extrabold text-slate-800 mt-1">{backtestResults.totalTrades}</p>
+                    </div>
+                    <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm text-left">
+                      <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Max Drawdown</p>
+                      <p className="text-2xl font-extrabold text-rose-500 mt-1">{backtestResults.maxDrawdown}</p>
+                    </div>
+                  </div>
+
+                  {/* Detail trades count */}
+                  <div className="bg-slate-50 border border-slate-100 px-4 py-3 rounded-xl flex justify-between text-[10px] text-slate-500 font-bold">
+                    <span>Win: <span className="text-emerald-600">{backtestResults.wins}</span></span>
+                    <span>Loss: <span className="text-rose-500">{backtestResults.losses}</span></span>
+                    <span>Break Even (BE): <span className="text-amber-600">{backtestResults.beTrades}</span></span>
+                  </div>
+
+                  {/* Equity Curve SVG line chart */}
+                  <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
+                    <h4 className="text-xs font-bold text-slate-800 mb-4">📈 Kurva Pertumbuhan Ekuitas (Dimulai dari 100%)</h4>
+                    <div className="w-full h-48 bg-slate-50/50 rounded-2xl border border-slate-100 flex items-end p-2 relative overflow-hidden">
+                      <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+                        <defs>
+                          <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#10b981" stopOpacity="0.25" />
+                            <stop offset="100%" stopColor="#10b981" stopOpacity="0.0" />
+                          </linearGradient>
+                        </defs>
+                        <line x1="0" y1="25" x2="100" y2="25" stroke="#f1f5f9" strokeWidth="0.5" />
+                        <line x1="0" y1="50" x2="100" y2="50" stroke="#f1f5f9" strokeWidth="0.5" />
+                        <line x1="0" y1="75" x2="100" y2="75" stroke="#f1f5f9" strokeWidth="0.5" />
+                        <path
+                          d={`M 0 100 ${backtestResults.equityCurve.map((eq, index) => {
+                            const x = (index / (backtestResults.equityCurve.length - 1)) * 100;
+                            const val = eq.balance;
+                            const y = 100 - Math.max(5, Math.min(95, ((val - 80) / 40) * 100));
+                            return `L ${x} ${y}`;
+                          }).join(' ')} L 100 100 Z`}
+                          fill="url(#chartGrad)"
+                        />
+                        <path
+                          d={backtestResults.equityCurve.map((eq, index) => {
+                            const x = (index / (backtestResults.equityCurve.length - 1)) * 100;
+                            const val = eq.balance;
+                            const y = 100 - Math.max(5, Math.min(95, ((val - 80) / 40) * 100));
+                            return `${index === 0 ? 'M' : 'L'} ${x} ${y}`;
+                          }).join(' ')}
+                          fill="none"
+                          stroke="#10b981"
+                          strokeWidth="2.5"
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                      <div className="absolute top-2 left-3 text-[9px] text-slate-400 font-bold">120% Balance</div>
+                      <div className="absolute top-1/2 -translate-y-1/2 left-3 text-[9px] text-slate-400 font-bold">100% Balance</div>
+                      <div className="absolute bottom-2 left-3 text-[9px] text-slate-400 font-bold">80% Balance</div>
+                    </div>
+                  </div>
+
+                  {/* Trade Logs Table */}
+                  <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden text-left">
+                    <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+                      <h4 className="text-xs font-bold text-slate-800">📜 Histori Log Transaksi Backtest ({backtestResults.trades.length} Posisi)</h4>
+                    </div>
+                    <div className="overflow-x-auto max-h-[400px]">
+                      <table className="w-full text-xs text-left">
+                        <thead className="bg-slate-50/70 text-slate-500 uppercase tracking-wider text-[9px] font-bold border-b border-slate-100">
+                          <tr>
+                            <th className="px-4 py-3">Tanggal / Waktu</th>
+                            <th className="px-4 py-3">Tipe</th>
+                            <th className="px-4 py-3">Entry</th>
+                            <th className="px-4 py-3">Exit</th>
+                            <th className="px-4 py-3">SL / TP</th>
+                            <th className="px-4 py-3">Hasil</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 text-slate-600 font-medium">
+                          {backtestResults.trades.map((t, idx) => {
+                            const isWin = t.pnl.includes('PROFIT');
+                            const isBE = t.pnl.includes('BREAK EVEN');
+                            return (
+                              <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                                <td className="px-4 py-3 whitespace-nowrap">
+                                  <div className="font-semibold text-slate-700">{t.openTime}</div>
+                                  <div className="text-[9px] text-slate-400 font-semibold">{t.closeTime ? `Exit: ${t.closeTime}` : ''}</div>
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap">
+                                  <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${t.type === 'BUY' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-rose-50 text-rose-600 border border-rose-100'}`}>
+                                    {t.type}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3 font-mono font-bold text-slate-700">{t.entry}</td>
+                                <td className="px-4 py-3 font-mono font-bold text-slate-700">{t.closePrice || '-'}</td>
+                                <td className="px-4 py-3 text-[10px] text-slate-500 font-semibold">
+                                  SL: {t.sl} <br />
+                                  TP: {t.tp}
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap font-bold">
+                                  <span className={isWin ? 'text-emerald-600' : isBE ? 'text-amber-500' : 'text-rose-500'}>
+                                    {t.pnl}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
         )}
+      </motion.div>
+    )}
 
         {/* Floating Chat Button */}
         <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
@@ -2825,6 +3381,126 @@ INSTRUKSI PENTING:
             )}
           </AnimatePresence>
         </div>
+
+        {/* SETTINGS MODAL */}
+        <AnimatePresence>
+          {isSettingsOpen && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                className="bg-white border border-slate-200 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden text-left flex flex-col"
+              >
+                {/* Header */}
+                <div className="bg-slate-50 px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">⚙️</span>
+                    <h3 className="text-sm font-bold text-slate-800">Pengaturan Parameter Bot AI</h3>
+                  </div>
+                  <button
+                    onClick={() => setIsSettingsOpen(false)}
+                    className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Form */}
+                <div className="p-6 space-y-5">
+                  {/* Min Probability Slider */}
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-xs font-bold">
+                      <span className="text-slate-600">Minimal Probabilitas Setup (%)</span>
+                      <span className="text-slate-900 bg-slate-100 px-2 py-0.5 rounded-lg">{botSettings.minProbability}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="40"
+                      max="95"
+                      value={botSettings.minProbability}
+                      onChange={(e) => setBotSettings(prev => ({ ...prev, minProbability: parseInt(e.target.value) }))}
+                      className="w-full accent-slate-950 cursor-pointer"
+                    />
+                    <p className="text-[10px] text-slate-400">Batasan kualitas minimal sebelum bot diizinkan membuka posisi perdagangan baru.</p>
+                  </div>
+
+                  {/* RRR Input */}
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-xs font-bold">
+                      <span className="text-slate-600">Default Risk-to-Reward Ratio</span>
+                      <span className="text-slate-900 bg-slate-100 px-2 py-0.5 rounded-lg">1 : {botSettings.riskRewardRatio}</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="1.0"
+                      max="5.0"
+                      step="0.1"
+                      value={botSettings.riskRewardRatio}
+                      onChange={(e) => setBotSettings(prev => ({ ...prev, riskRewardRatio: parseFloat(e.target.value) }))}
+                      className="w-full accent-slate-950 cursor-pointer"
+                    />
+                    <p className="text-[10px] text-slate-400">Jarak target Take Profit (TP) dibandingkan jarak Stop Loss (SL) awal.</p>
+                  </div>
+
+                  {/* Active Symbols Checkbox Grid */}
+                  <div className="space-y-2">
+                    <span className="text-xs font-bold text-slate-600">Aset Aktif yang Dipantau</span>
+                    <div className="grid grid-cols-2 gap-2">
+                      {['EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD', 'AAPL', 'TSLA', 'BBRI', 'TLKM'].map((sym) => {
+                        const isChecked = botSettings.activeSymbols?.includes(sym);
+                        return (
+                          <label
+                            key={sym}
+                            className={`flex items-center gap-2 px-3 py-2 border rounded-xl cursor-pointer hover:bg-slate-50 transition-colors ${
+                              isChecked ? 'border-slate-300 bg-slate-50/50' : 'border-slate-200'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(e) => {
+                                const newActive = e.target.checked
+                                  ? [...(botSettings.activeSymbols || []), sym]
+                                  : (botSettings.activeSymbols || []).filter(s => s !== sym);
+                                setBotSettings(prev => ({ ...prev, activeSymbols: newActive }));
+                              }}
+                              className="rounded text-slate-900 focus:ring-slate-900 accent-slate-900 cursor-pointer"
+                            />
+                            <span className="text-xs font-bold text-slate-700">{sym}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <p className="text-[10px] text-slate-400">Centang aset yang ingin dipindai dan dijalankan otomatis oleh sistem bot.</p>
+                  </div>
+                </div>
+
+                {/* Footer Buttons */}
+                <div className="bg-slate-50 px-6 py-4 border-t border-slate-100 flex justify-end gap-2">
+                  <button
+                    onClick={() => {
+                      setIsSettingsOpen(false);
+                      fetchBackendTrades(); // restore original
+                    }}
+                    className="px-4 py-2 border border-slate-200 hover:bg-slate-100 text-slate-600 rounded-xl text-xs font-bold transition-all"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    onClick={() => {
+                      saveBotSettings(botSettings);
+                      setIsSettingsOpen(false);
+                    }}
+                    className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold active:scale-95 transition-all"
+                  >
+                    Simpan Pengaturan
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
 
 
       </div>

@@ -92,6 +92,30 @@ async function vercelHandler(req, res) {
             };
           });
 
+          // Fetch settings
+          let settings = {
+            minProbability: 70,
+            riskRewardRatio: 2.3,
+            activeSymbols: ['EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD', 'AAPL', 'TSLA', 'BBRI', 'TLKM']
+          };
+          try {
+            const resSettings = await fetch(`${supabaseUrl}/rest/v1/bot_settings?select=*&limit=1`, { headers });
+            if (resSettings.ok) {
+              const settingsList = await resSettings.json();
+              if (settingsList && settingsList.length > 0) {
+                settings = {
+                  minProbability: settingsList[0].min_probability,
+                  riskRewardRatio: settingsList[0].risk_reward_ratio,
+                  activeSymbols: typeof settingsList[0].active_symbols === 'string'
+                    ? JSON.parse(settingsList[0].active_symbols)
+                    : settingsList[0].active_symbols
+                };
+              }
+            }
+          } catch(err) {
+            console.warn('Gagal membaca tabel bot_settings:', err.message);
+          }
+
           // Format trades ke botLogs untuk kompatibilitas frontend
           const botLogs = {};
           const symbols = ['EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD', 'AAPL', 'TSLA', 'BBRI', 'TLKM'];
@@ -105,7 +129,8 @@ async function vercelHandler(req, res) {
             trades,
             botLogs,
             logs,
-            performance
+            performance,
+            settings
           });
         }
       } catch (e) {
@@ -125,13 +150,20 @@ async function vercelHandler(req, res) {
         botLogs[sym] = parsed.trades.filter(t => t.symbol === sym);
       });
 
+      const defaultSettings = {
+        minProbability: 70,
+        riskRewardRatio: 2.3,
+        activeSymbols: ['EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD', 'AAPL', 'TSLA', 'BBRI', 'TLKM']
+      };
+
       return res.status(200).json({
         success: true,
         source: 'local_file',
         trades: parsed.trades,
         botLogs,
         logs: parsed.logs,
-        performance: parsed.performance
+        performance: parsed.performance,
+        settings: parsed.settings || defaultSettings
       });
     }
 

@@ -46,7 +46,31 @@ async function getDatabase() {
           };
         });
 
-        return { trades, logs, performance };
+        // Fetch settings
+        let settings = {
+          minProbability: 70,
+          riskRewardRatio: 2.3,
+          activeSymbols: ['EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD', 'AAPL', 'TSLA', 'BBRI', 'TLKM']
+        };
+        try {
+          const resSettings = await fetch(`${supabaseUrl}/rest/v1/bot_settings?select=*&limit=1`, { headers });
+          if (resSettings.ok) {
+            const settingsList = await resSettings.json();
+            if (settingsList && settingsList.length > 0) {
+              settings = {
+                minProbability: settingsList[0].min_probability,
+                riskRewardRatio: settingsList[0].risk_reward_ratio,
+                activeSymbols: typeof settingsList[0].active_symbols === 'string'
+                  ? JSON.parse(settingsList[0].active_symbols)
+                  : settingsList[0].active_symbols
+              };
+            }
+          }
+        } catch(err) {
+          console.warn('Gagal membaca tabel bot_settings:', err.message);
+        }
+
+        return { trades, logs, performance, settings };
       }
     } catch (e) {
       console.warn('Gagal memuat dari Supabase, beralih ke Database Lokal:', e.message);
@@ -57,7 +81,16 @@ async function getDatabase() {
   try {
     if (fs.existsSync(LOCAL_DB_PATH)) {
       const data = fs.readFileSync(LOCAL_DB_PATH, 'utf-8');
-      return JSON.parse(data);
+      const parsed = JSON.parse(data);
+      const defaultSettings = {
+        minProbability: 70,
+        riskRewardRatio: 2.3,
+        activeSymbols: ['EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD', 'AAPL', 'TSLA', 'BBRI', 'TLKM']
+      };
+      if (!parsed.settings) {
+        parsed.settings = defaultSettings;
+      }
+      return parsed;
     }
   } catch (e) {
     console.error('Gagal membaca file database lokal:', e);
@@ -69,7 +102,12 @@ async function getDatabase() {
     logs: [
       { id: 1, time: new Date().toLocaleString('id-ID'), text: '[SISTEM] Database diinisialisasi. Bot siap bekerja.' }
     ],
-    performance: getDefaultPerformance()
+    performance: getDefaultPerformance(),
+    settings: {
+      minProbability: 70,
+      riskRewardRatio: 2.3,
+      activeSymbols: ['EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD', 'AAPL', 'TSLA', 'BBRI', 'TLKM']
+    }
   };
 }
 
@@ -123,7 +161,21 @@ async function saveDatabase(data) {
           total_trades: p.totalTrades,
           analysis_explain: p.analysisExplain
         };
-      });
+      }));
+
+      // 4. Format settings untuk Supabase
+      const upsertSettings = data.settings ? fetch(`${supabaseUrl}/rest/v1/bot_settings`, {
+        method: 'POST',
+        headers: { ...headers, 'Prefer': 'resolution=merge-duplicates' },
+        body: JSON.stringify({
+          id: 1,
+          min_probability: data.settings.minProbability,
+          risk_reward_ratio: data.settings.riskRewardRatio,
+          active_symbols: Array.isArray(data.settings.activeSymbols) 
+            ? JSON.stringify(data.settings.activeSymbols) 
+            : JSON.stringify([])
+        })
+      }) : Promise.resolve({ ok: true });
 
       // Lakukan request parallel ke Supabase rest API dengan header upsert (on_conflict)
       const upsertTrades = fetch(`${supabaseUrl}/rest/v1/trades`, {
@@ -144,7 +196,7 @@ async function saveDatabase(data) {
         body: JSON.stringify(perfBody)
       });
 
-      const [resTrades, resLogs, resPerf] = await Promise.all([upsertTrades, upsertLogs, upsertPerf]);
+      const [resTrades, resLogs, resPerf, resSettings] = await Promise.all([upsertTrades, upsertLogs, upsertPerf, upsertSettings]);
       
       if (!resTrades.ok || !resLogs.ok || !resPerf.ok) {
         console.warn('Peringatan: Gagal sinkronisasi Supabase secara penuh. Status Trades:', resTrades.status, 'Logs:', resLogs.status, 'Perf:', resPerf.status);
@@ -266,12 +318,27 @@ async function vercelHandler(req, res) {
       console.warn('Gagal fetch harga dari TradingView Scanner API, menggunakan harga internal:', e.message);
     }
 
-    // Intersep aksi close_all manual
+    // Intersep aksi manual via POST/PUT
     if (req.method === 'POST' || req.method === 'PUT') {
       let body = {};
       try {
         body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {};
       } catch (e) {}
+
+      if (body.action === 'update_settings') {
+        const defaultSymbols = ['EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD', 'AAPL', 'TSLA', 'BBRI', 'TLKM'];
+        db.settings = {
+          minProbability: parseInt(body.minProbability) || 70,
+          riskRewardRatio: parseFloat(body.riskRewardRatio) || 2.3,
+          activeSymbols: Array.isArray(body.activeSymbols) ? body.activeSymbols : defaultSymbols
+        };
+        await saveDatabase(db);
+        return res.status(200).json({
+          success: true,
+          message: 'Pengaturan parameter bot berhasil diperbarui.',
+          settings: db.settings
+        });
+      }
 
       if (body.action === 'close_all') {
         let closedCount = 0;
@@ -436,7 +503,13 @@ async function vercelHandler(req, res) {
     // ==========================================
     // 2. ANALISIS & EKSEKUSI BOT MULTI-TIMEFRAME
     // ==========================================
+    const activeSymbols = db.settings?.activeSymbols || symbols;
+    const minProbability = db.settings?.minProbability || 70;
+    const riskRewardRatio = db.settings?.riskRewardRatio || 2.3;
+
     symbols.forEach((sym, index) => {
+      if (!activeSymbols.includes(sym)) return;
+
       // Pastikan tidak ada trade aktif untuk symbol ini sebelum membuka trade baru
       const hasActive = db.trades.some(t => t.symbol === sym && t.status === 'active');
       if (hasActive) return;
@@ -527,7 +600,7 @@ async function vercelHandler(req, res) {
         }
 
         tradeType = 'BUY';
-        executeTrade = probability >= 70;
+        executeTrade = probability >= minProbability;
       } else if (h1Trend === 'BEARISH') {
         bias = 'SELL ONLY (Tren H1 Bearish)';
 
@@ -569,7 +642,7 @@ async function vercelHandler(req, res) {
         }
 
         tradeType = 'SELL';
-        executeTrade = probability >= 70;
+        executeTrade = probability >= minProbability;
       } else {
         bias = 'NO TRADE (H1 Sideways)';
         probability = Math.round(15 + Math.random() * 20); // Sangat rendah karena tidak ada trend bias
@@ -586,13 +659,10 @@ async function vercelHandler(req, res) {
           'AAPL': 1.50, 'TSLA': 2.50, 'BBRI': 40, 'TLKM': 20
         };
         const slDist = distMap[sym] || 0.01;
-        const perf = db.performance[sym] || getDefaultPerformance()[sym];
-        const rrrValStr = perf.avgRrr || '1:2.3';
-        const rrrParts = rrrValStr.split(':').map(Number);
-        const riskMultiplier = rrrParts[1] || 2.3;
+        const rrrValStr = `1:${riskRewardRatio}`;
 
         const newSl = tradeType === 'BUY' ? (currentLive - slDist) : (currentLive + slDist);
-        const newTp = tradeType === 'BUY' ? (currentLive + slDist * riskMultiplier) : (currentLive - slDist * riskMultiplier);
+        const newTp = tradeType === 'BUY' ? (currentLive + slDist * riskRewardRatio) : (currentLive - slDist * riskRewardRatio);
 
         const decs = sym.includes('JPY') ? 2 : sym.includes('BBRI') || sym.includes('TLKM') ? 0 : 5;
 
@@ -626,7 +696,7 @@ async function vercelHandler(req, res) {
         if (bias.includes('NO TRADE')) {
           logText = `[DISIPLIN] ${sym} dilewati. Tren H1 sedang Sideways (${bias}). Probabilitas hanya ${probability}%. Menunggu struktur bias tren terbentuk.`;
         } else {
-          logText = `[DISIPLIN] ${sym} dilewati. Tren H1 selaras ${h1Trend}, namun tingkat konfluensi kurang memadai (Konfluensi aktif: [${confluences.join(' + ') || 'None'}]). Probabilitas ${probability}% (Batas minimal 70%).`;
+          logText = `[DISIPLIN] ${sym} dilewati. Tren H1 selaras ${h1Trend}, namun tingkat konfluensi kurang memadai (Konfluensi aktif: [${confluences.join(' + ') || 'None'}]). Probabilitas ${probability}% (Batas minimal ${minProbability}%).`;
         }
         
         newLogs.push({
