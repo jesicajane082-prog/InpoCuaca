@@ -161,7 +161,7 @@ async function saveDatabase(data) {
           total_trades: p.totalTrades,
           analysis_explain: p.analysisExplain
         };
-      }));
+      });
 
       // 4. Format settings untuk Supabase
       const upsertSettings = data.settings ? fetch(`${supabaseUrl}/rest/v1/bot_settings`, {
@@ -269,6 +269,36 @@ function getDefaultPerformance() {
   return defaultMap;
 }
 
+// Helper to parse request body under any runtime
+async function getRequestBody(req) {
+  if (req.body && typeof req.body === 'object') {
+    return req.body;
+  }
+  if (req.body && typeof req.body === 'string') {
+    try {
+      return JSON.parse(req.body);
+    } catch (e) {
+      return {};
+    }
+  }
+  return new Promise((resolve) => {
+    let bodyStr = '';
+    if (typeof req.on !== 'function') {
+      return resolve({});
+    }
+    req.on('data', chunk => {
+      bodyStr += chunk.toString();
+    });
+    req.on('end', () => {
+      try {
+        resolve(bodyStr ? JSON.parse(bodyStr) : {});
+      } catch (e) {
+        resolve({});
+      }
+    });
+  });
+}
+
 // Endpoint Handler Utama (Cron Job / API Request)
 async function vercelHandler(req, res) {
   try {
@@ -320,10 +350,7 @@ async function vercelHandler(req, res) {
 
     // Intersep aksi manual via POST/PUT
     if (req.method === 'POST' || req.method === 'PUT') {
-      let body = {};
-      try {
-        body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {};
-      } catch (e) {}
+      const body = await getRequestBody(req);
 
       if (body.action === 'update_settings') {
         const defaultSymbols = ['EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD', 'AAPL', 'TSLA', 'BBRI', 'TLKM'];
