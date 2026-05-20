@@ -1074,17 +1074,24 @@ INSTRUKSI PENTING:
       
       const updatedTrades = [];
       const newLogs = [];
+      const spreadMap = {
+        'EURUSD': 0.00010, 'GBPUSD': 0.00015, 'USDJPY': 0.015, 'XAUUSD': 0.30,
+        'AAPL': 0.05, 'TSLA': 0.10, 'BBRI': 2, 'TLKM': 1
+      };
+
       for (let trade of db.trades) {
         if (trade.status === 'active') {
           const currentPrice = livePrices[trade.symbol] || parseFloat(trade.entry);
           const entryNum = parseFloat(trade.entry);
           const slNum = parseFloat(trade.sl);
           const tpNum = parseFloat(trade.tp);
+          const spread = spreadMap[trade.symbol] || 0.0001;
           
           let shouldClose = false;
           let isWin = false;
           let closeReason = 'Target Hit';
           let isBreakEvenExit = false;
+          let isTsExit = false;
 
           if (trade.type === 'BUY') {
             if (currentPrice >= tpNum) {
@@ -1093,59 +1100,96 @@ INSTRUKSI PENTING:
             } else if (currentPrice <= slNum) {
               shouldClose = true;
               isWin = false;
-              if (trade.sl === trade.entry) {
-                isBreakEvenExit = true;
-              }
+              if (trade.isTS) isTsExit = true;
+              else if (trade.isBE || trade.sl === trade.entry) isBreakEvenExit = true;
             }
-          } else {
-            if (currentPrice <= tpNum) {
+          } else { // SELL
+            const askPrice = currentPrice + spread;
+            if (askPrice <= tpNum) {
               shouldClose = true;
               isWin = true;
-            } else if (currentPrice >= slNum) {
+            } else if (askPrice >= slNum) {
               shouldClose = true;
               isWin = false;
-              if (trade.sl === trade.entry) {
-                isBreakEvenExit = true;
-              }
+              if (trade.isTS) isTsExit = true;
+              else if (trade.isBE || trade.sl === trade.entry) isBreakEvenExit = true;
             }
           }
 
-          // Break Even (BE) Logic:
-          // Jika harga sudah bergerak searah sejauh 50% dari target TP,
-          // pindahkan Stop Loss (SL) ke harga Entry (BE) untuk mengamankan posisi.
-          if (!shouldClose && trade.sl !== trade.entry) {
-            let isBeTriggered = false;
+          // Break Even (BE) & Trailing Stop (TS) Logic:
+          if (!shouldClose) {
+            const decs = trade.symbol.includes('JPY') ? 2 : trade.symbol.includes('BBRI') || trade.symbol.includes('TLKM') ? 0 : 5;
+            const rrrParts = trade.rrr ? trade.rrr.split(':').map(Number) : [1, 2.3];
+            const riskMultiplier = rrrParts[1] || 2.3;
+            const tsStopMultiplier = 0.5 / riskMultiplier; // Dinamis untuk mengunci +0.5R profit
+
             if (trade.type === 'BUY') {
               const tpDist = tpNum - entryNum;
-              const halfway = entryNum + tpDist * 0.5;
-              if (currentPrice >= halfway) {
+              const beTarget = entryNum + tpDist * 0.5;
+              const tsTarget = entryNum + tpDist * 0.75;
+              const tsStopLevel = entryNum + tpDist * tsStopMultiplier;
+
+              if (currentPrice >= tsTarget && !trade.isTS) {
+                trade.sl = tsStopLevel.toFixed(decs);
+                trade.isTS = true;
+                trade.isBE = true;
+                newLogs.push({
+                  id: timestamp + Math.random(),
+                  time: timeStr,
+                  text: `[MANAGEMEN RISIKO] Posisi ${trade.symbol} (${trade.type}) melampaui 75% target TP. Stop Loss digeser menjadi Trailing Stop (+0.5R).`
+                });
+              } else if (currentPrice >= beTarget && !trade.isBE && !trade.isTS) {
                 trade.sl = trade.entry;
-                isBeTriggered = true;
+                trade.isBE = true;
+                newLogs.push({
+                  id: timestamp + Math.random(),
+                  time: timeStr,
+                  text: `[MANAGEMEN RISIKO] Posisi ${trade.symbol} (${trade.type}) mencapai 50% target TP. SL dipindahkan ke Entry (BE).`
+                });
               }
             } else { // SELL
               const tpDist = entryNum - tpNum;
-              const halfway = entryNum - tpDist * 0.5;
-              if (currentPrice <= halfway) {
-                trade.sl = trade.entry;
-                isBeTriggered = true;
-              }
-            }
+              const beTarget = entryNum - tpDist * 0.5;
+              const tsTarget = entryNum - tpDist * 0.75;
+              const tsStopLevel = entryNum - tpDist * tsStopMultiplier;
 
-            if (isBeTriggered) {
-              newLogs.push({
-                id: timestamp + Math.random(),
-                time: timeStr,
-                text: `[MANAGEMEN RISIKO] Posisi ${trade.symbol} (${trade.type}) telah mencapai 50% target TP. Stop Loss otomatis dipindahkan ke harga Entry (${trade.entry}) untuk mengamankan Break-Even (BE).`
-              });
+              const askPrice = currentPrice + spread;
+              if (askPrice <= tsTarget && !trade.isTS) {
+                trade.sl = tsStopLevel.toFixed(decs);
+                trade.isTS = true;
+                trade.isBE = true;
+                newLogs.push({
+                  id: timestamp + Math.random(),
+                  time: timeStr,
+                  text: `[MANAGEMEN RISIKO] Posisi ${trade.symbol} (${trade.type}) melampaui 75% target TP. Stop Loss digeser menjadi Trailing Stop (+0.5R).`
+                });
+              } else if (askPrice <= beTarget && !trade.isBE && !trade.isTS) {
+                trade.sl = trade.entry;
+                trade.isBE = true;
+                newLogs.push({
+                  id: timestamp + Math.random(),
+                  time: timeStr,
+                  text: `[MANAGEMEN RISIKO] Posisi ${trade.symbol} (${trade.type}) mencapai 50% target TP. SL dipindahkan ke Entry (BE).`
+                });
+              }
             }
           }
 
           if (shouldClose) {
-            const rrrParts = trade.rrr.split(':').map(Number);
-            const riskMultiplier = rrrParts[1] || 2.0;
+            const rrrParts = trade.rrr ? trade.rrr.split(':').map(Number) : [1, 2.3];
+            const riskMultiplier = rrrParts[1] || 2.3;
             
             let pnlChange = 0;
-            if (isBreakEvenExit) {
+            const closePriceNum = trade.type === 'BUY' ? currentPrice : (currentPrice + spread);
+            trade.closePrice = closePriceNum.toFixed(trade.entry.includes('.') ? trade.entry.split('.')[1].length : 2);
+            
+            if (isTsExit) {
+              trade.pnl = `TRAILING STOP (+${(0.5 * riskMultiplier).toFixed(2)}%)`;
+              trade.status = 'closed';
+              trade.time = `Selesai (Trailing Stop)`;
+              pnlChange = 0.5 * riskMultiplier;
+              closeReason = 'Trailing Stop';
+            } else if (isBreakEvenExit) {
               trade.pnl = `BREAK EVEN (+0.00%)`;
               trade.status = 'closed';
               trade.time = `Selesai (Break Even)`;
@@ -1163,15 +1207,30 @@ INSTRUKSI PENTING:
             newLogs.push({
               id: timestamp + Math.random(),
               time: timeStr,
-              text: `[EKSEKUSI] Trade ${trade.symbol} (${trade.type}) ditutup pada harga ${currentPrice}. Hasil: ${trade.pnl}.`
+              text: `[EKSEKUSI] Trade ${trade.symbol} (${trade.type}) ditutup pada harga ${closePriceNum.toFixed(trade.entry.includes('.') ? trade.entry.split('.')[1].length : 2)}. Hasil: ${trade.pnl}.`
             });
 
             const perf = db.performance[trade.symbol] || {};
             const parsePct = (val) => parseFloat(val?.replace(/[+%]/g, '')) || 0;
+            
             const new1D = parsePct(perf.profit1D) + pnlChange;
+            const new1W = parsePct(perf.profit1W) + pnlChange;
+            const new1M = parsePct(perf.profit1M) + pnlChange;
             const totalTr = parseInt(perf.totalTrades) || 0;
+
             perf.profit1D = `${new1D >= 0 ? '+' : ''}${new1D.toFixed(2)}%`;
+            perf.profit1W = `${new1W >= 0 ? '+' : ''}${new1W.toFixed(2)}%`;
+            perf.profit1M = `${new1M >= 0 ? '+' : ''}${new1M.toFixed(2)}%`;
             perf.totalTrades = `${totalTr + 1} Trades`;
+            
+            // Hitung win rate secara dinamis dari semua closed trades di database untuk simbol ini
+            const symbolTrades = db.trades.filter(t => t.symbol === trade.symbol && t.status === 'closed');
+            const winsCount = symbolTrades.filter(t => t.pnl.includes('PROFIT') || t.pnl.includes('TRAILING STOP')).length;
+            const totalClosed = symbolTrades.length;
+            if (totalClosed > 0) {
+              perf.winRate = `${((winsCount / totalClosed) * 100).toFixed(1)}%`;
+            }
+
             db.performance[trade.symbol] = perf;
           }
         }

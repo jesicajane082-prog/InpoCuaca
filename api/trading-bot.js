@@ -433,18 +433,24 @@ async function vercelHandler(req, res) {
     // 1. EVALUASI TRADE AKTIF YANG SEDANG JALAN
     // ==========================================
     const updatedTrades = [];
+    const spreadMap = {
+      'EURUSD': 0.00010, 'GBPUSD': 0.00015, 'USDJPY': 0.015, 'XAUUSD': 0.30,
+      'AAPL': 0.05, 'TSLA': 0.10, 'BBRI': 2, 'TLKM': 1
+    };
+
     for (let trade of db.trades) {
       if (trade.status === 'active') {
         const currentPrice = livePrices[trade.symbol];
         const entryNum = parseFloat(trade.entry);
         const slNum = parseFloat(trade.sl);
         const tpNum = parseFloat(trade.tp);
+        const spread = spreadMap[trade.symbol] || 0.0001;
         
         let shouldClose = false;
         let isWin = false;
         let closeReason = 'Target Hit';
 
-        // Crossover check (SL/TP) & Break-Even exit detection
+        // Crossover check (SL/TP) & Break-Even exit detection dengan kompensasi spread
         let isBreakEvenExit = false;
         let isTsExit = false;
         if (trade.type === 'BUY') {
@@ -457,11 +463,12 @@ async function vercelHandler(req, res) {
             if (trade.isTS) isTsExit = true;
             else if (trade.isBE) isBreakEvenExit = true;
           }
-        } else { // SELL
-          if (currentPrice <= tpNum) {
+        } else { // SELL (Exit BUY di ASK price = currentPrice + spread)
+          const askPrice = currentPrice + spread;
+          if (askPrice <= tpNum) {
             shouldClose = true;
             isWin = true;
-          } else if (currentPrice >= slNum) {
+          } else if (askPrice >= slNum) {
             shouldClose = true;
             isWin = false;
             if (trade.isTS) isTsExit = true;
@@ -472,11 +479,15 @@ async function vercelHandler(req, res) {
         // Break Even (BE) & Trailing Stop (TS) Logic:
         if (!shouldClose) {
           const decs = trade.symbol.includes('JPY') ? 2 : trade.symbol.includes('BBRI') || trade.symbol.includes('TLKM') ? 0 : 5;
+          const rrrParts = trade.rrr ? trade.rrr.split(':').map(Number) : [1, 2.3];
+          const riskMultiplier = rrrParts[1] || 2.3;
+          const tsStopMultiplier = 0.5 / riskMultiplier; // Dinamis untuk mengunci +0.5R profit
+
           if (trade.type === 'BUY') {
             const tpDist = tpNum - entryNum;
             const beTarget = entryNum + tpDist * 0.5;
             const tsTarget = entryNum + tpDist * 0.75;
-            const tsStopLevel = entryNum + tpDist * 0.217; // +0.5R if RRR is 2.3
+            const tsStopLevel = entryNum + tpDist * tsStopMultiplier;
 
             if (currentPrice >= tsTarget && !trade.isTS) {
               trade.sl = tsStopLevel.toFixed(decs);
@@ -500,9 +511,10 @@ async function vercelHandler(req, res) {
             const tpDist = entryNum - tpNum;
             const beTarget = entryNum - tpDist * 0.5;
             const tsTarget = entryNum - tpDist * 0.75;
-            const tsStopLevel = entryNum - tpDist * 0.217;
+            const tsStopLevel = entryNum - tpDist * tsStopMultiplier;
 
-            if (currentPrice <= tsTarget && !trade.isTS) {
+            const askPrice = currentPrice + spread;
+            if (askPrice <= tsTarget && !trade.isTS) {
               trade.sl = tsStopLevel.toFixed(decs);
               trade.isTS = true;
               trade.isBE = true;
@@ -511,7 +523,7 @@ async function vercelHandler(req, res) {
                 time: timeStr,
                 text: `[MANAGEMEN RISIKO] Posisi ${trade.symbol} (${trade.type}) melampaui 75% target TP. Stop Loss digeser menjadi Trailing Stop (+0.5R).`
               });
-            } else if (currentPrice <= beTarget && !trade.isBE && !trade.isTS) {
+            } else if (askPrice <= beTarget && !trade.isBE && !trade.isTS) {
               trade.sl = trade.entry;
               trade.isBE = true;
               newLogs.push({
@@ -524,15 +536,16 @@ async function vercelHandler(req, res) {
         }
 
         if (shouldClose) {
-          const rrrParts = trade.rrr.split(':').map(Number);
-          const riskMultiplier = rrrParts[1] || 2.0;
+          const rrrParts = trade.rrr ? trade.rrr.split(':').map(Number) : [1, 2.3];
+          const riskMultiplier = rrrParts[1] || 2.3;
           
           const pipDivisor = trade.symbol.includes('JPY') ? 0.01 : trade.symbol.includes('BBRI') || trade.symbol.includes('TLKM') ? 1 : 0.0001;
           const tpPips = Math.round(Math.abs(tpNum - entryNum) / pipDivisor);
           const slPips = Math.round(tpPips / riskMultiplier);
 
           let pnlChange = 0;
-          trade.closePrice = currentPrice.toFixed(trade.entry.includes('.') ? trade.entry.split('.')[1].length : 2);
+          const closePriceNum = trade.type === 'BUY' ? currentPrice : (currentPrice + spread);
+          trade.closePrice = closePriceNum.toFixed(trade.entry.includes('.') ? trade.entry.split('.')[1].length : 2);
           if (isTsExit) {
             trade.pnl = `TRAILING STOP (+${(0.5 * riskMultiplier).toFixed(2)}% / +${Math.round(tpPips * 0.5)} Pips)`;
             trade.status = 'closed';
@@ -557,7 +570,7 @@ async function vercelHandler(req, res) {
           newLogs.push({
             id: timestamp + Math.random(),
             time: timeStr,
-            text: `[EKSEKUSI] Trade ${trade.symbol} (${trade.type}) ditutup pada harga ${currentPrice}. Hasil: ${trade.pnl}.`
+            text: `[EKSEKUSI] Trade ${trade.symbol} (${trade.type}) ditutup pada harga ${closePriceNum.toFixed(trade.entry.includes('.') ? trade.entry.split('.')[1].length : 2)}. Hasil: ${trade.pnl}.`
           });
 
           // Update performance statistics
@@ -573,6 +586,14 @@ async function vercelHandler(req, res) {
           perf.profit1W = `${new1W >= 0 ? '+' : ''}${new1W.toFixed(2)}%`;
           perf.profit1M = `${new1M >= 0 ? '+' : ''}${new1M.toFixed(2)}%`;
           perf.totalTrades = `${totalTr + 1} Trades`;
+          
+          // Hitung win rate secara dinamis dari semua closed trades di database untuk simbol ini
+          const symbolTrades = db.trades.filter(t => t.symbol === trade.symbol && t.status === 'closed');
+          const winsCount = symbolTrades.filter(t => t.pnl.includes('PROFIT') || t.pnl.includes('TRAILING STOP')).length;
+          const totalClosed = symbolTrades.length;
+          if (totalClosed > 0) {
+            perf.winRate = `${((winsCount / totalClosed) * 100).toFixed(1)}%`;
+          }
           
           db.performance[trade.symbol] = perf;
         }
@@ -610,12 +631,16 @@ async function vercelHandler(req, res) {
       if (hasActive) continue;
 
       const candles = historicalDataMap[sym] || [];
-      if (candles.length < 800) continue; // Butuh minimal 800 candle untuk SMA 800
+      if (candles.length < 5) continue; // Pastikan data candlestick terisi
 
       const currentLive = livePrices[sym];
       const i = candles.length - 1;
       const candle = candles[i];
-      candle.close = currentLive; // Sinkronkan candle terakhir dengan harga live detik ini
+      
+      // Sinkronkan candle terakhir dengan harga live secara logis (konsisten OHLC)
+      candle.close = currentLive;
+      if (currentLive > candle.high) candle.high = currentLive;
+      if (currentLive < candle.low) candle.low = currentLive;
 
       // Kurangi waktu secara berurutan agar log aset terdistribusi secara natural (drift 4 detik per aset)
       const itemTimestamp = timestamp - (index * 4000);
@@ -625,23 +650,32 @@ async function vercelHandler(req, res) {
       const candleHourUTC = new Date(itemTimestamp).getUTCHours();
       const isForex = sym.includes('USD') || sym.includes('JPY');
       const isKillzone = isForex ? (candleHourUTC >= 7 && candleHourUTC <= 17) : true;
-      if (!isKillzone) continue; // Skip hunting outside active hours
+      if (!isKillzone) {
+        newLogs.push({
+          id: itemTimestamp + Math.random(),
+          time: itemTimeStr,
+          text: `[SISTEM] ${sym} dilewati secara otomatis karena di luar jam aktif pasar (Forex Killzone: 07:00 - 17:00 UTC / 14:00 - 00:00 WIB) demi menghindari volatilitas rendah.`
+        });
+        continue; // Skip hunting outside active hours
+      }
 
-      // A. HIGH TIMEFRAME (H1) - STRUKTUR TREN MACRO MENGGUNAKAN SMA 800
+      // A. HIGH TIMEFRAME (H1) - STRUKTUR TREN MACRO MENGGUNAKAN SMA DINAMIS (CRASH-PROOF & ADAPTIF)
+      const activeSmaPeriod = Math.min(800, candles.length);
       let sma800Sum = 0;
-      for (let j = i - 800 + 1; j <= i; j++) {
+      for (let j = i - activeSmaPeriod + 1; j <= i; j++) {
         sma800Sum += candles[j].close;
       }
-      const sma800 = sma800Sum / 800;
+      const sma800 = sma800Sum / activeSmaPeriod;
 
       const isTrendBullish = candle.close > sma800;
       const isTrendBearish = candle.close < sma800;
       const h1Trend = isTrendBullish ? 'BULLISH' : isTrendBearish ? 'BEARISH' : 'SIDEWAYS';
 
-      // B. PILAR 1: SMART MONEY CONCEPTS (SMC) & SUPPORT RESISTANCE (S&R)
+      // B. PILAR 1: SMART MONEY CONCEPTS (SMC) & SUPPORT RESISTANCE (S&R) - CRASH PROOF LOOP
       let support = candles[i-1].low;
       let resistance = candles[i-1].high;
-      for (let j = i - 30; j < i; j++) {
+      const startSR = Math.max(0, i - 30);
+      for (let j = startSR; j < i; j++) {
         if (candles[j].low < support) support = candles[j].low;
         if (candles[j].high > resistance) resistance = candles[j].high;
       }
@@ -931,15 +965,26 @@ async function fetchRecentCandles(symbol) {
     'AAPL': 'AAPL',
     'TSLA': 'TSLA'
   };
+  const isForexOrGold = ['EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD'].includes(symbol);
+  const intervalVal = isForexOrGold ? '5m' : '15m'; // M5 untuk Scalping Forex/Emas, M15 untuk Saham
+  const rangeVal = isForexOrGold ? '30d' : '60d'; // 30 hari untuk 5m, 60 hari untuk 15m
+
   const ticker = TICKER_MAP[symbol] || 'EURUSD=X';
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=15m&range=14d`;
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=${intervalVal}&range=${rangeVal}`;
 
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 detik timeout
+
     const response = await fetch(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-      }
+      },
+      signal: controller.signal
     });
+    
+    clearTimeout(timeoutId);
+
     if (!response.ok) return [];
     const data = await response.json();
     if (!data.chart || !data.chart.result || !data.chart.result[0]) return [];
@@ -980,9 +1025,12 @@ async function runRealBacktest(symbol, period, minProbability, riskRewardRatio) 
     'TSLA': 'TSLA'
   };
 
+  const isForexOrGold = ['EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD'].includes(symbol);
+  const intervalVal = isForexOrGold ? '5m' : '15m'; // Selaraskan dengan timeframe scanner (5m untuk Forex, 15m untuk Saham)
+
   const ticker = TICKER_MAP[symbol] || 'EURUSD=X';
   const range = period <= 7 ? '7d' : period <= 14 ? '14d' : period <= 30 ? '30d' : '60d';
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=15m&range=${range}`;
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=${intervalVal}&range=${range}`;
 
   const response = await fetch(url, {
     headers: {
